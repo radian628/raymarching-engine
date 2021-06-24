@@ -479,8 +479,8 @@ class Raymarcher {
             this.img = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this.img);
 
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
             gl.texImage2D(
                 gl.TEXTURE_2D, 0, gl.RGBA, 2048, 2048, 0, gl.RGBA, gl.UNSIGNED_BYTE, img
@@ -555,8 +555,6 @@ class Raymarcher {
         fragShader = fragShader.replace("//REPLACEHERE", replaceText);
 
         fragShader = fragShader.replace(/\/\/SDF_START[\s\S]+?\/\/SDF_END/g, this.shaderState.signedDistanceFunction);
-
-        console.log(fragShader);
 
         this.prog = buildShaderProgram(this.gl, vertShader, fragShader);
         this.gl.finish();

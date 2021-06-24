@@ -27,16 +27,20 @@ canvas {
     border-bottom-right-radius: 20px;
 }
 
-#sdf-shader {
+#shader-input {
     z-index: 1;
+    margin: 20px;
+    background: black;
+    color: white;
+    font-family: monospace;
+    height: 80vh;
+    width: 30vw;
 }
 
-#shader-input {
-    margin: 20px;
+#sdf-shader {
     top: 0px;
     left: 0px;
     position: absolute;
-    font-family: monospace;
     overflow-x: initial;
     overflow-wrap: break-word;
     background: black;
