@@ -111,11 +111,15 @@ vec3 rotateQuat(vec3 position, vec4 q)
   return v + 2.0 * cross(q.yzw, cross(q.yzw, v) + q.x * v);
 }
 
+vec4 quatAngleAxis(float angle, vec3 axis) {
+    return vec4(cos(angle), axis * sin(angle));
+}
+
 //REPLACE_START(globalSDF)
 
 //reflect across all three axes
 
-float time2;
+float time;
 
 //SDF_START
 float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic) {
@@ -123,7 +127,7 @@ float globalSDF(vec3 position, out vec3 color, out float roughness, out bool met
     //return fractalSDF(/*mod(rayPosition + vec3(1.0f), 2f) - vec3(1.0f)*/position, vec3(2.0, 2.0, 2.0), 2.0, color, roughness);
 
     //metallic = true;  
-    float time3 = time2 * 0.01;
+    float time3 = time * 0.01;
     vec3 offset = vec3(
         0.0 + floor((position.z) / 2.0) * time3,
         0.0 + floor((position.z) / 2.0) * time3,
@@ -285,7 +289,7 @@ void main() {
     seed = vTexCoord + vec2(uTime);
 
     for (int samples = 0; samples < int(SAMPLESPERFRAME); samples++) {
-        time2 = uTime + biasToCenter(rand()) * uTimeMotionBlurFactor;
+        time = uTime + biasToCenter(rand()) * uTimeMotionBlurFactor;
 
         vec3 coords = gl_FragCoord.xyz / (uViewportSize.y) - vec3(uViewportSize.x / uViewportSize.y * 0.5, 0.5, 0.0);
         vec2 texCoords = coords.xy;
