@@ -1,7 +1,21 @@
+/*ui
+[{
+    id: "speed",
+    type: "range",
+    min: 0,
+    max: 5,
+    value: 1,
+    step: 0.001,
+    label: "Speed",
+    description: "Speed at which the cubes move."
+}]
+*/
+uniform float speed;
+
 float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic) {
     metallic = true;
 
-    float timeScaled = time * 0.01;
+    float timeScaled = time * 0.01 * speed;
     vec3 offset = vec3(
         0.0 + floor((position.z) / 2.0) * timeScaled,
         0.0 + floor((position.z) / 2.0) * timeScaled,

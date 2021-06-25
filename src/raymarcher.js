@@ -272,7 +272,7 @@ class Raymarcher {
         this.surface = graphicsInterface.surface;
         this.gl = graphicsInterface.gl;
         this.gl.getExtension("EXT_color_buffer_float");
-        
+
         this.recompileNextFrame = false;
         this.recreateFramebuffers = false;
 
@@ -282,7 +282,7 @@ class Raymarcher {
         this.t = 0;
 
         this.shaderState = {
-            position: [0, 0, 0],
+            uPosition: [0, 0, 0],
             raymarchingSteps: 32,
             normalRaymarchingSteps: 8,
             reflections: 1,
@@ -291,21 +291,21 @@ class Raymarcher {
             samplesPerFrame: 1
         };
         this.shaderStateInfo = {
-            position: {},
-            rotation: {},
-            uMotionBlurPrevPos: {},
-            uMotionBlurPrevRot: {},
-            uShadowBrightness: {},
-            uAOStrength: {},
-            uShadowSoftness: {},
-            uLightStrength: {},
-            uRayHitThreshold: {},
-            uBlendFactor: {},
-            uFOV: {},
-            uDOFStrength: {},
-            uFocalPlaneDistance: {},
-            uLambertLightLocation: {},
-            uTimeMotionBlurFactor: {},
+            uPosition: { uniform: true, uniformType: "3fv" },
+            rotation: { uniform: true, uniformType: "4fv" },
+            uMotionBlurPrevPos: { uniform: true, uniformType: "3fv" },
+            uMotionBlurPrevRot: { uniform: true, uniformType: "4fv" },
+            uShadowBrightness: { uniform: true, uniformType: "1f" },
+            uAOStrength: { uniform: true, uniformType: "1f" },
+            uShadowSoftness: { uniform: true, uniformType: "1f" },
+            uLightStrength: { uniform: true, uniformType: "1f" },
+            uRayHitThreshold: { uniform: true, uniformType: "1f" },
+            uBlendFactor: { uniform: true, uniformType: "1f" },
+            uFOV: { uniform: true, uniformType: "1f" },
+            uDOFStrength: { uniform: true, uniformType: "1f" },
+            uFocalPlaneDistance: { uniform: true, uniformType: "1f" },
+            uLambertLightLocation: { uniform: true, uniformType: "3fv" },
+            uTimeMotionBlurFactor: { uniform: true, uniformType: "1f" },
 
             raymarchingSteps: { recompile: true },
             normalRaymarchingSteps: { recompile: true },
@@ -317,6 +317,15 @@ class Raymarcher {
             signedDistanceFunction: { recompile: true },
             resolution: { recompile: true, resize: true }
         };
+        this.defaultShaderStateInfo = JSON.parse(JSON.stringify(this.shaderStateInfo));
+    }
+
+    resetShaderStateInfo() {
+        this.shaderStateInfo = JSON.parse(JSON.stringify(this.defaultShaderStateInfo));
+    }
+
+    registerShaderState(k, v) {
+        this.shaderStateInfo[k] = v;
     }
 
     setShaderState(k, v) {
@@ -474,6 +483,7 @@ class Raymarcher {
 
         fragShader = fragShader.replace(/\/\/SDF_START[\s\S]+?\/\/SDF_END/g, this.shaderState.signedDistanceFunction);
 
+        console.log(fragShader);
         this.prog = buildShaderProgram(this.gl, vertShader, fragShader);
         this.gl.finish();
     }
@@ -505,28 +515,35 @@ class Raymarcher {
         gl.uniform1i(gl.getUniformLocation(this.prog, "uPrevFrame"), 0);
         gl.uniform1i(gl.getUniformLocation(this.prog, "img"), 1);
         gl.uniform1f(gl.getUniformLocation(this.prog, "uTime"), this.t);
-        gl.uniform3fv(gl.getUniformLocation(this.prog, "uPosition"), this.shaderState.position);
-        gl.uniform3fv(gl.getUniformLocation(this.prog, "uLambertLightLocation"), this.shaderState.uLambertLightLocation);
-        gl.uniform4fv(gl.getUniformLocation(this.prog, "uRotationQuaternion"), this.shaderState.rotation);
+        // gl.uniform3fv(gl.getUniformLocation(this.prog, "uPosition"), this.shaderState.position);
+        // gl.uniform3fv(gl.getUniformLocation(this.prog, "uLambertLightLocation"), this.shaderState.uLambertLightLocation);
+        // gl.uniform4fv(gl.getUniformLocation(this.prog, "uRotationQuaternion"), this.shaderState.rotation);
         gl.uniform2fv(gl.getUniformLocation(this.prog, "uViewportSize"), this.shaderState.resolution);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uFOV"), this.shaderState.uFOV);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uShadowBrightness"), this.shaderState.uShadowBrightness);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uHitThreshold"), this.shaderState.uRayHitThreshold);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uAOStrength"), this.shaderState.uAOStrength);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uTrail"), this.shaderState.uBlendFactor);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uFOV"), this.shaderState.uFOV);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uShadowBrightness"), this.shaderState.uShadowBrightness);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uHitThreshold"), this.shaderState.uRayHitThreshold);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uAOStrength"), this.shaderState.uAOStrength);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uTrail"), this.shaderState.uBlendFactor);
 
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uDofStrength"), this.shaderState.uDOFStrength);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uDofDistance"), this.shaderState.uFocalPlaneDistance);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uDofStrength"), this.shaderState.uDOFStrength);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uDofDistance"), this.shaderState.uFocalPlaneDistance);
 
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uSoftShadows"), this.shaderState.uShadowSoftness);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uLightStrength"), this.shaderState.uLightStrength);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uSoftShadows"), this.shaderState.uShadowSoftness);
+        // gl.uniform1f(gl.getUniformLocation(this.prog, "uLightStrength"), this.shaderState.uLightStrength);
 
-        gl.uniform3fv(gl.getUniformLocation(this.prog, "uMotionBlurPrevPos"), this.shaderState.uMotionBlurPrevPos);
-        gl.uniform4fv(gl.getUniformLocation(this.prog, "uMotionBlurPrevRot"), this.shaderState.uMotionBlurPrevRot);
+        // gl.uniform3fv(gl.getUniformLocation(this.prog, "uMotionBlurPrevPos"), this.shaderState.uMotionBlurPrevPos);
+        // gl.uniform4fv(gl.getUniformLocation(this.prog, "uMotionBlurPrevRot"), this.shaderState.uMotionBlurPrevRot);
         
         let aVertexPosition = gl.getAttribLocation(this.prog, "aVertexPosition");
 
-        this.setUniform("uTimeMotionBlurFactor", "1f", this.shaderState.uTimeMotionBlurFactor);
+        //this.setUniform("uTimeMotionBlurFactor", "1f", this.shaderState.uTimeMotionBlurFactor);
+
+        Object.keys(this.shaderStateInfo).forEach(key => {
+            let ssi = this.shaderStateInfo[key];
+            if (ssi.uniform) {
+                this.setUniform(key, ssi.uniformType, this.shaderState[key]);
+            }
+        }); 
 
         gl.enableVertexAttribArray(aVertexPosition);
         gl.vertexAttribPointer(aVertexPosition, 2,
@@ -539,6 +556,7 @@ class Raymarcher {
         gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.currentFramebuffer);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.prevFramebuffer);
         gl.blitFramebuffer(0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+
 
         if (this.resetState == 1) {
             await this.recompileShader();

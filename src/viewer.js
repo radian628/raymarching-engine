@@ -398,6 +398,17 @@ function createUITabs(tabSwitcher, elemData) {
     hideAll();
 }
 
+function getUIComment(shaderSource) {
+    let uiCommentMatches = shaderSource.match(/\/\*ui[\s\S]*?\*\//g);
+    if (uiCommentMatches) {
+        let uiComment = uiCommentMatches[0].slice(4, -2);
+        let uiObject = eval(uiComment);
+        //console.log(uiObject, uiComment);
+        return { settings: uiObject };
+    }
+    return [];
+}
+
 c.requestPointerLock = c.requestPointerLock ||
                             c.mozRequestPointerLock;
 document.exitPointerLock = document.exitPointerLock ||
@@ -459,6 +470,29 @@ window.addEventListener("resize", evt => {
 //Initialize the stuff
 let rmSettings;
 let raymarcher;
+
+function initSettingsMenu() {   
+    let uiElem = document.getElementById("ui-container");
+    let settingsElem = document.getElementById("settings");
+    while (settingsElem.children.length > 0) settingsElem.removeChild(settingsElem.lastChild); 
+    rmSettings = createRaymarcherSettingsMenu(
+    settingsElem,
+    uiElem,
+    raymarcherSettings,
+    (value, setting, isChange) => {
+        if (!setting.indirect) {
+            if (setting.recompile) {
+                if (isChange) {
+                    raymarcher.setShaderState(setting.id, value);
+                }
+            } else {
+                raymarcher.setShaderState(setting.id, value);
+            }
+        }
+    }
+);
+}
+
 async function init() {
 
     createUITabs(document.getElementById("tab-switcher"), uiTabs);
@@ -466,30 +500,23 @@ async function init() {
     raymarcher = new Raymarcher(createCanvasGraphicsInterface(c));
     raymarcher.setShaderState("resolution", [window.innerWidth, window.innerHeight]);
     await raymarcher.init();
-    let uiElem = document.getElementById("ui-container");
-    let settingsElem = document.getElementById("settings");
-    settingsElem.innerHTML = "";
     //while (uiElem.h) uiElem.removeChild(uiElem.lastChild);
-    rmSettings = createRaymarcherSettingsMenu(
-        settingsElem,
-        uiElem,
-        raymarcherSettings,
-        (value, setting, isChange) => {
-            if (!setting.indirect) {
-                if (setting.recompile) {
-                    if (isChange) {
-                        raymarcher.setShaderState(setting.id, value);
-                    }
-                } else {
-                    raymarcher.setShaderState(setting.id, value);
-                }
-            }
-        }
-    );
+    initSettingsMenu();
 
     let sdfTextarea = document.getElementById("shader-input");
     let changeSDF = () => {
         raymarcher.setShaderState("signedDistanceFunction", sdfTextarea.value);
+        raymarcher.resetShaderStateInfo();
+        let uiObject = getUIComment(sdfTextarea.value);
+        if (uiObject.settings) {
+            raymarcherSettings["Shader Controls"] = uiObject;
+            uiObject.settings.forEach(setting => {
+                raymarcher.registerShaderState(setting.id, { uniform: true, uniformType: setting.uniformType || "1f" });
+            });
+        } else {
+            delete raymarcherSettings["Shader Controls"];
+        }
+        initSettingsMenu();
     }
 
     sdfTextarea.value = (await request("sdfs/default.glsl")).response;
@@ -569,7 +596,7 @@ async function drawLoop() {
     playerTransform.position = playerTransform.position.map((e, i) => { return e + playerTransform.velocity[i]; });
     playerTransform.velocity = playerTransform.velocity.map(e => { return e * rmSettings.playerSmoothness; });
 
-    raymarcher.setShaderState("position", playerTransform.position);
+    raymarcher.setShaderState("uPosition", playerTransform.position);
 
     //raymarcher.position = playerTransform.position;
     raymarcher.setShaderState("rotation", playerTransform.quatRotation);

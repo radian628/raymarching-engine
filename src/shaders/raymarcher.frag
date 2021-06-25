@@ -12,22 +12,22 @@
 uniform vec3 uPosition;
 uniform float uTime;
 uniform vec3 uLambertLightLocation;
-uniform vec4 uRotationQuaternion;
+uniform vec4 rotation;
 uniform vec2 uViewportSize;
 uniform float uFOV;
 uniform float uShadowBrightness;
-uniform float uHitThreshold;
+uniform float uRayHitThreshold;
 uniform float uAOStrength;
 
 uniform sampler2D uPrevFrame;
 uniform sampler2D img;
 
-uniform float uTrail;
+uniform float uBlendFactor;
 
-uniform float uDofStrength;
-uniform float uDofDistance;
+uniform float uDOFStrength;
+uniform float uFocalPlaneDistance;
 
-uniform float uSoftShadows;
+uniform float uShadowSoftness;
 uniform float uLightStrength;
 
 uniform vec3 uMotionBlurPrevPos;
@@ -181,7 +181,7 @@ vec3 marchCameraRay(vec3 origin, vec3 direction, out float finalMinDist, out int
 	for (int i = 0; i < STEPS; i++) {
 		minDist = globalSDF(position);
 		position += directionNormalized * minDist;
-		if (minDist < uHitThreshold) {
+		if (minDist < uRayHitThreshold) {
 			stepsBeforeThreshold = i;
             break;
 		}
@@ -225,7 +225,7 @@ vec3 marchShadowRay(vec3 origin, vec3 direction, out float finalMinDist, out int
 	for (int i = 0; i < STEPS; i++) {
 		minDist = globalSDF(position);
 		position += directionNormalized * minDist;
-		if (minDist < uHitThreshold || sign(position.x - uLambertLightLocation2.x) != sign(origin.x - uLambertLightLocation2.x)) {
+		if (minDist < uRayHitThreshold || sign(position.x - uLambertLightLocation2.x) != sign(origin.x - uLambertLightLocation2.x)) {
 			stepsBeforeThreshold = i;
             break;
 		}
@@ -308,12 +308,12 @@ void main() {
             rand()//rand(vec2(uTime * 1277.0, 371.2 * uTime) * coords.xy)
         ) - vec3(0.5);
 
-        vec3 cameraPosVecs = noiseVec3 * uDofStrength;
+        vec3 cameraPosVecs = noiseVec3 * uDOFStrength;
 
-        uLambertLightLocation2 = uLambertLightLocation + noiseVec3 * uSoftShadows;
+        uLambertLightLocation2 = uLambertLightLocation + noiseVec3 * uShadowSoftness;
 
         vec3 rayStartPos = mix(uPosition, uMotionBlurPrevPos, noiseVec3.x) + cameraPosVecs;
-        vec3 cameraRayGoal = rotateQuat(vec3(coords.x + cameraNoiseVecs.x, 1.0, coords.y + cameraNoiseVecs.y), mix(uRotationQuaternion, uMotionBlurPrevRot, noiseVec3.y)) * uDofDistance;
+        vec3 cameraRayGoal = rotateQuat(vec3(coords.x + cameraNoiseVecs.x, 1.0, coords.y + cameraNoiseVecs.y), mix(rotation, uMotionBlurPrevRot, noiseVec3.y)) * uFocalPlaneDistance;
 
         vec3 cameraRay = normalize(cameraRayGoal - cameraPosVecs);
 
@@ -329,7 +329,7 @@ void main() {
             
             float shadowDistToSurface = 0.0;
             int shadowSteps = STEPS;
-            vec3 shadowRayHit1 = marchShadowRay(rayHit + (uLambertLightLocation2 - rayHit) * uHitThreshold * 10.0, (uLambertLightLocation2 - rayHit), shadowDistToSurface, shadowSteps);
+            vec3 shadowRayHit1 = marchShadowRay(rayHit + (uLambertLightLocation2 - rayHit) * uRayHitThreshold * 10.0, (uLambertLightLocation2 - rayHit), shadowDistToSurface, shadowSteps);
 
             outColor += getColor(rayHit, normal, steps1, shadowRayHit1, color);
 
@@ -337,7 +337,7 @@ void main() {
 
 
             for (int j = 0; j < TRANSMISSIONRAYS; j++) {
-                float randSample = rand(coords.xy + vec2(uTime + float(j) * 123.2, 2.34 * -uTime * float(j)));
+                float randSample = rand();
                 vec3 transmissionSample = mix(rayHit, rayStartPos, randSample);
                 vec3 dirToLight = uLambertLightLocation2 - transmissionSample;
                 vec3 transmissionRayHit = marchTransmissionRay(transmissionSample, dirToLight);
@@ -353,7 +353,7 @@ void main() {
                 rand()//rand(coords.xy + vec2(-uTime - 76.0, 55.0 + uTime) + floati)
             ) - vec3(0.5)) * roughness;
 
-            rayStartPos = rayHit + reflectVec * uHitThreshold * 15.0;
+            rayStartPos = rayHit + reflectVec * uRayHitThreshold * 15.0;
             if (metallic) {
                 cameraRay = reflectVec + noise;
             } else {
@@ -366,9 +366,9 @@ void main() {
     outColor = rgbAsymptote(outColor);
 
     #ifdef ADDITIVE
-    fragColor = vec4(outColor, 1.0) * uTrail + vec4(texture(uPrevFrame, vTexCoord).rgb, 1.0);//vec4(outColor * (1.0 - float(steps1) / float(STEPS)) * colorFactor, 1.0);
+    fragColor = vec4(outColor, 1.0) * uBlendFactor + vec4(texture(uPrevFrame, vTexCoord).rgb, 1.0);//vec4(outColor * (1.0 - float(steps1) / float(STEPS)) * colorFactor, 1.0);
     #else
-    fragColor = mix(vec4(outColor, 1.0), vec4(texture(uPrevFrame, vTexCoord).rgb, 1.0), uTrail);
+    fragColor = mix(vec4(outColor, 1.0), vec4(texture(uPrevFrame, vTexCoord).rgb, 1.0), uBlendFactor);
     #endif
 
     #ifdef RESET
