@@ -235,7 +235,7 @@ function vequals(a, b) {
 }
 
 function copyArray(obj) {
-    if (Array.isArray(obj)) {
+    if (Array.isArray(obj) || typeof obj == "string") {
         return obj.concat();
     }
     return obj;
@@ -272,31 +272,7 @@ class Raymarcher {
         this.surface = graphicsInterface.surface;
         this.gl = graphicsInterface.gl;
         this.gl.getExtension("EXT_color_buffer_float");
-        this.position = [0.01, 0.01, 0.01];
-        this.rotation = [0.9689124217106447, 0.12370197962726147, 0.12370197962726147, 0.12370197962726147];
-        this._resolution = [1920, 1080];
-
-        this.uShadowBrightness = 0.5;
-        this.uAOStrength = 1.0;
-        this._reflections = 1;
-        this.uShadowSoftness = 0;
-        this.uLightStrength = 1;
-        this.uLambertLightLocation = [0.001, 0.001, 0.001];
-
-        this._raymarchingSteps = 24;
-        this._normalRaymarchingSteps = 8;
-        this.uRayHitThreshold = 0.0001;
-        this._transmissionRaymarchingSteps = 32;
-        this._transmissionRayCount = 0;
-
-        this._additiveBlending = false;
-        this.uBlendFactor = 0;
-        this.uFOV = 1.5;
-        this.uDOFStrength = 0;
-        this.uFocalPlaneDistance = 0.2;
-        this.uMotionBlurPrevPos = [0, 0, 0];
-        this.uMotionBlurPrevRot = [0, 1, 0, 0];
-
+        
         this.recompileNextFrame = false;
         this.recreateFramebuffers = false;
 
@@ -338,7 +314,8 @@ class Raymarcher {
             transmissionRayCount: { recompile: true },
             samplesPerFrame: { recompile: true },
             additiveBlending: { recompile: true },
-            signedDistanceFunction: { recompile: true }
+            signedDistanceFunction: { recompile: true },
+            resolution: { recompile: true, resize: true }
         };
     }
 
@@ -358,98 +335,39 @@ class Raymarcher {
         this.shaderState[k] = v;
     }
 
-    setAllState (state) {
+    setAllShaderState (state) {
         //Object.assign(this, state);
         Object.keys(state).forEach(key => {
-            this[key] = state[key];
+            setShaderState(key, state[key]);
         })
     }
 
-    getAllState () {
+    getAllShaderState () {
         let state = {};
-        Object.keys(this).forEach(key => {
-            if (key.charAt(0) == "_") {
-                state[key.slice(1)] = copyArray(this[key]);
-            } else {
-                state[key] = copyArray(this[key]);
-            }
+        Object.keys(this.shaderState).forEach(key => {
+            state[key] = copyArray(this.shaderState[key]);
         });
-        delete state.c;
-        delete state.gl;
-        delete state.resetState;
-        delete state.recompileNextFrame;
-        delete state.recreateFramebuffers;
-        delete state.currentFrame;
-        delete state.currentFramebuffer;
-        delete state.prevFrame;
-        delete state.prevFramebuffer;
-        delete state.prog;
-        delete state.vertexBuffer;
-        delete state.toneBalanceProg;
         return state;
     }
 
-    set resolution (res) {
-        if (!vequals(res, this._resolution)) this.recreateFramebuffers = true;
-        this._resolution = res;
-    }
-    get resolution () {
-        return this._resolution;
-    }
-
-    set reflections(v) {
-        this.recompileNextFrame = true;
-        this._reflections = v;
-    }
-    get reflections() {
-        return this._reflections;
-    }
-
-    set raymarchingSteps(v) {
-        this.recompileNextFrame = true;
-        this._raymarchingSteps = v;
-    }
-    get raymarchingSteps() {
-        return this._raymarchingSteps;
-    }
-
-    set normalRaymarchingSteps(v) {
-        this.recompileNextFrame = true;
-        this._normalRaymarchingSteps = v;
-    }
-    get normalRaymarchingSteps() {
-        return this._normalRaymarchingSteps;
-    }
-
-    set transmissionRaymarchingSteps(v) {
-        this.recompileNextFrame = true;
-        this._transmissionRaymarchingSteps = v;
-    }
-    get transmissionRaymarchingSteps() {
-        return this._transmissionRaymarchingSteps;
-    }
-
-    set transmissionRayCount(v) {
-        this.recompileNextFrame = true;
-        this._transmissionRayCount = v;
-    }
-    get transmissionRayCount() {
-        return this._transmissionRayCount;
-    }
-
-    set additiveBlending(v) {
-        this.recompileNextFrame = true;
-        this._additiveBlending = v;
-    }
-    get additiveBlending() {
-        return this._additiveBlending;
+    removeDuplicateState(shaderStateList) {
+        let currentState = {};
+        shaderStateList.forEach(shaderState => {
+            Object.keys(shaderState).forEach(key => {
+                if (shaderState[key] == currentState[key]) {
+                    delete shaderState[key];
+                } else {
+                    currentState[key] = shaderState[key];
+                }
+            });
+        });
     }
 
     createFramebuffers() {
         let gl = this.gl;
-        this.surface.width = this._resolution[0];
-        this.surface.height = this._resolution[1];
-        gl.viewport(0, 0, ...this._resolution);
+        this.surface.width = this.shaderState.resolution[0];
+        this.surface.height = this.shaderState.resolution[1];
+        gl.viewport(0, 0, ...this.shaderState.resolution);
 
         //======= PREVIOUS FRAME =========
         this.prevFrame = gl.createTexture();
@@ -590,8 +508,8 @@ class Raymarcher {
         gl.uniform3fv(gl.getUniformLocation(this.prog, "uPosition"), this.shaderState.position);
         gl.uniform3fv(gl.getUniformLocation(this.prog, "uLambertLightLocation"), this.shaderState.uLambertLightLocation);
         gl.uniform4fv(gl.getUniformLocation(this.prog, "uRotationQuaternion"), this.shaderState.rotation);
-        gl.uniform2fv(gl.getUniformLocation(this.prog, "uViewportSize"), this._resolution);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uFOV"), this.uFOV);
+        gl.uniform2fv(gl.getUniformLocation(this.prog, "uViewportSize"), this.shaderState.resolution);
+        gl.uniform1f(gl.getUniformLocation(this.prog, "uFOV"), this.shaderState.uFOV);
         gl.uniform1f(gl.getUniformLocation(this.prog, "uShadowBrightness"), this.shaderState.uShadowBrightness);
         gl.uniform1f(gl.getUniformLocation(this.prog, "uHitThreshold"), this.shaderState.uRayHitThreshold);
         gl.uniform1f(gl.getUniformLocation(this.prog, "uAOStrength"), this.shaderState.uAOStrength);

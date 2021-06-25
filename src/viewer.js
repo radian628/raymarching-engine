@@ -453,7 +453,7 @@ var playerTransform = {
 };
 
 window.addEventListener("resize", evt => {
-    raymarcher.resolution = [c.width, c.height];
+    raymarcher.setShaderState("resolution", [window.innerWidth, window.innerHeight]);
 });
 
 //Initialize the stuff
@@ -464,7 +464,7 @@ async function init() {
     createUITabs(document.getElementById("tab-switcher"), uiTabs);
     
     raymarcher = new Raymarcher(createCanvasGraphicsInterface(c));
-    raymarcher.resolution = [c.width, c.height];
+    raymarcher.setShaderState("resolution", [window.innerWidth, window.innerHeight]);
     await raymarcher.init();
     let uiElem = document.getElementById("ui-container");
     let settingsElem = document.getElementById("settings");
@@ -554,6 +554,7 @@ async function drawLoop() {
     if (singleFrameKeys.r) {
         isRecording = !isRecording;
         if (!isRecording) {
+            raymarcher.removeDuplicateState(recording);
             console.log(JSON.stringify(recording));
             recording = [];
         }
@@ -592,7 +593,10 @@ async function drawLoop() {
         raymarcher.setShaderState("uMotionBlurPrevRot", playerTransform.quatRotation);
     }
 
-    if (isRecording) recording.push(raymarcher.getAllState());
+    if (isRecording) {
+        let shaderState = raymarcher.getAllShaderState();
+        recording.push(shaderState);
+    };
 
     singleFrameKeys = {};
 
