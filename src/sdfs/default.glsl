@@ -1,3 +1,17 @@
+/*ui
+[
+    {
+        id: "cubeSize",
+        type: "range",
+        min: 0,
+        max: 1,
+        value: 0.5,
+        label: "Cube Size",
+        description: "How big each cube is."
+    }
+]
+*/
+
 /*
 The function globalSDF is a signed distance function (SDF) for some 3D solid (e.g. a cube)
 It should return the minimum distance between the 3D solid and any point.
@@ -21,6 +35,8 @@ that the parameter position lies near
 the surface of the object (color, roughness, and metallic
 are only calculated for the final position of a ray)
 */
+uniform float cubeSize;
+
 float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic) {
     //unique index for each cube
     ivec3 index = ivec3(position / 2.0);
@@ -35,7 +51,7 @@ float globalSDF(vec3 position, out vec3 color, out float roughness, out bool met
     roughness = float(index.x) * 0.01;
 
     //allow cubes to repeat with modulo
-    vec3 d = abs(mod(position, 2.0) - vec3(1.0)) - vec3(0.5);
+    vec3 d = abs(mod(position, 2.0) - vec3(1.0)) - vec3(cubeSize);
 
     //calculate final min. distance to cube
     return min(max(d.x,max(d.y,d.z)),0.0) + length(max(d,0.0));

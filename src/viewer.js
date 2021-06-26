@@ -1,12 +1,15 @@
 //Define canvas for WebGL.
 var c = document.getElementById("canvas");
 
-//TODO:
+//COMPLETE
 //Fix quaternion bug (rapid rotation messes it up) - complete
 //Improve normal calculations - complete
 //Fix framebuffer resize issue - complete
 //Setup encapsulated raymarcher for proper linkages with GUI. - complete
-//Implement new screenshot system
+
+//TODO:
+//Add rendering system for slow, non-realtime renders + playback (like I did w/ the fractal)
+//Stop settings from resetting to default values every single time a shader is changed (per-section resets?).
 
 //=============================== USER INTERFACE =================================
 let raymarcherSettings = {
@@ -332,6 +335,7 @@ function createRaymarcherSettingsMenu(settingsContainer, uiContainer, settings, 
                     if (elem.type == "number" || elem.type == "range") {
                         value = Number(value);
                     }
+                    setting.value = value;
                     if (setting.transformer) value = setting.transformer(value);
                     currentValues[elem.id] = value;
                     console.log(e.type);
@@ -398,16 +402,6 @@ function createUITabs(tabSwitcher, elemData) {
     hideAll();
 }
 
-function getUIComment(shaderSource) {
-    let uiCommentMatches = shaderSource.match(/\/\*ui[\s\S]*?\*\//g);
-    if (uiCommentMatches) {
-        let uiComment = uiCommentMatches[0].slice(4, -2);
-        let uiObject = eval(uiComment);
-        //console.log(uiObject, uiComment);
-        return { settings: uiObject };
-    }
-    return [];
-}
 
 c.requestPointerLock = c.requestPointerLock ||
                             c.mozRequestPointerLock;
@@ -581,7 +575,7 @@ async function drawLoop() {
     if (singleFrameKeys.r) {
         isRecording = !isRecording;
         if (!isRecording) {
-            raymarcher.removeDuplicateState(recording);
+            Raymarcher.removeDuplicateState(recording);
             console.log(JSON.stringify(recording));
             recording = [];
         }

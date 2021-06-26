@@ -11,6 +11,7 @@
 
 uniform vec3 uPosition;
 uniform float uTime;
+uniform float uNoiseSeed;
 uniform vec3 uLambertLightLocation;
 uniform vec4 rotation;
 uniform vec2 uViewportSize;
@@ -286,7 +287,7 @@ vec3 rgbAsymptote(vec3 rgb) {
 //marches the rays, calculates normals, determines and returns color, etc.
 void main() {
     vec3 outColor = vec3(0.0);
-    seed = vTexCoord + vec2(uTime);
+    seed = vTexCoord + vec2(uNoiseSeed);
 
     for (int samples = 0; samples < int(SAMPLESPERFRAME); samples++) {
         time = uTime + biasToCenter(rand()) * uTimeMotionBlurFactor;

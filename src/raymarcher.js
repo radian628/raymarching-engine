@@ -150,6 +150,17 @@ function quatToEuler(q) {
 
 //====================== GENERAL UTIL ==========================
 
+function getUIComment(shaderSource) {
+    let uiCommentMatches = shaderSource.match(/\/\*ui[\s\S]*?\*\//g);
+    if (uiCommentMatches) {
+        let uiComment = uiCommentMatches[0].slice(4, -2);
+        let uiObject = eval(uiComment);
+        //console.log(uiObject, uiComment);
+        return { settings: uiObject };
+    }
+    return [];
+}
+
 function replaceMacro(source, macroName, value) {
     return source.replace(`#define ${macroName}`, `#define ${macroName} ${value} //`);
 }
@@ -306,6 +317,7 @@ class Raymarcher {
             uFocalPlaneDistance: { uniform: true, uniformType: "1f" },
             uLambertLightLocation: { uniform: true, uniformType: "3fv" },
             uTimeMotionBlurFactor: { uniform: true, uniformType: "1f" },
+            uTime: { uniform: true, uniformType: "1f" },
 
             raymarchingSteps: { recompile: true },
             normalRaymarchingSteps: { recompile: true },
@@ -328,26 +340,28 @@ class Raymarcher {
         this.shaderStateInfo[k] = v;
     }
 
-    setShaderState(k, v) {
+    setShaderState(k, v, ignoreInvalidState) {
         let info = this.shaderStateInfo[k];
 
-        if (!info) throw new Error(`Invalid shader state parameter: ${k}`);
+        if (!info && !ignoreInvalidState) throw new Error(`Invalid shader state parameter: ${k}`);
+        
+        if (!ignoreInvalidState) {
+            if (info.recompile) {
+                this.recompileNextFrame = true;
+            }
 
-        if (info.recompile) {
-            this.recompileNextFrame = true;
+            if (info.resize) {
+                this.recreateFramebuffers = true;
+            }
         }
-
-        if (info.resize) {
-            this.recreateFramebuffers = true;
-        }
-
+        
         this.shaderState[k] = v;
     }
 
-    setAllShaderState (state) {
+    setAllShaderState (state, ignoreInvalidState) {
         //Object.assign(this, state);
         Object.keys(state).forEach(key => {
-            setShaderState(key, state[key]);
+            this.setShaderState(key, state[key], ignoreInvalidState);
         })
     }
 
@@ -359,7 +373,7 @@ class Raymarcher {
         return state;
     }
 
-    removeDuplicateState(shaderStateList) {
+    static removeDuplicateState(shaderStateList) {
         let currentState = {};
         shaderStateList.forEach(shaderState => {
             Object.keys(shaderState).forEach(key => {
@@ -370,6 +384,16 @@ class Raymarcher {
                 }
             });
         });
+    }
+
+    static composeShaderState(shaderStateList) {
+        let composition = {};
+        shaderStateList.forEach(shaderState => {
+            Object.keys(shaderState).forEach(key => {
+                composition[key] = shaderState[key];
+            });
+        });
+        return composition;
     }
 
     createFramebuffers() {
@@ -488,6 +512,17 @@ class Raymarcher {
         this.gl.finish();
     }
 
+    registerCustomUniforms() {
+        let customUniforms = getUIComment(this.shaderState.signedDistanceFunction);
+        console.log(customUniforms)
+        if (customUniforms) {
+            customUniforms = customUniforms.settings;
+            customUniforms.forEach(uniform => {
+                this.registerShaderState(uniform.id, { uniform: true, uniformType: uniform.uniformType || "1f" }); 
+            });
+        }
+    }
+
     setUniform(name, type, value) {
         this.gl[`uniform${type}`](this.gl.getUniformLocation(this.prog, name), value);
     }
@@ -501,6 +536,7 @@ class Raymarcher {
         }
             
         this.t++;
+        if (this.t > 10000) this.t = -10000;
 
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
 
@@ -514,29 +550,9 @@ class Raymarcher {
 
         gl.uniform1i(gl.getUniformLocation(this.prog, "uPrevFrame"), 0);
         gl.uniform1i(gl.getUniformLocation(this.prog, "img"), 1);
-        gl.uniform1f(gl.getUniformLocation(this.prog, "uTime"), this.t);
-        // gl.uniform3fv(gl.getUniformLocation(this.prog, "uPosition"), this.shaderState.position);
-        // gl.uniform3fv(gl.getUniformLocation(this.prog, "uLambertLightLocation"), this.shaderState.uLambertLightLocation);
-        // gl.uniform4fv(gl.getUniformLocation(this.prog, "uRotationQuaternion"), this.shaderState.rotation);
+        gl.uniform1f(gl.getUniformLocation(this.prog, "uNoiseSeed"), this.t);
         gl.uniform2fv(gl.getUniformLocation(this.prog, "uViewportSize"), this.shaderState.resolution);
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uFOV"), this.shaderState.uFOV);
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uShadowBrightness"), this.shaderState.uShadowBrightness);
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uHitThreshold"), this.shaderState.uRayHitThreshold);
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uAOStrength"), this.shaderState.uAOStrength);
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uTrail"), this.shaderState.uBlendFactor);
-
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uDofStrength"), this.shaderState.uDOFStrength);
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uDofDistance"), this.shaderState.uFocalPlaneDistance);
-
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uSoftShadows"), this.shaderState.uShadowSoftness);
-        // gl.uniform1f(gl.getUniformLocation(this.prog, "uLightStrength"), this.shaderState.uLightStrength);
-
-        // gl.uniform3fv(gl.getUniformLocation(this.prog, "uMotionBlurPrevPos"), this.shaderState.uMotionBlurPrevPos);
-        // gl.uniform4fv(gl.getUniformLocation(this.prog, "uMotionBlurPrevRot"), this.shaderState.uMotionBlurPrevRot);
-        
         let aVertexPosition = gl.getAttribLocation(this.prog, "aVertexPosition");
-
-        //this.setUniform("uTimeMotionBlurFactor", "1f", this.shaderState.uTimeMotionBlurFactor);
 
         Object.keys(this.shaderStateInfo).forEach(key => {
             let ssi = this.shaderStateInfo[key];
