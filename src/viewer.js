@@ -158,7 +158,7 @@ let raymarcherSettings = {
             {
                 id: "uRayHitThreshold",
                 type: "range",
-                min: -6,
+                min: -8,
                 max: 0,
                 value: -4,
                 label: "Ray Hit Threshold",
@@ -591,6 +591,8 @@ async function drawLoop() {
     playerTransform.velocity = playerTransform.velocity.map(e => { return e * rmSettings.playerSmoothness; });
 
     raymarcher.setShaderState("uPosition", playerTransform.position);
+
+    raymarcher.setShaderState("uTime", t);
 
     //raymarcher.position = playerTransform.position;
     raymarcher.setShaderState("rotation", playerTransform.quatRotation);

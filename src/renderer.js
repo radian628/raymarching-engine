@@ -43,7 +43,7 @@ async function asyncSleep(ms) {
     });
 }
 
-let accumulateCount = 128;
+let accumulateCount = 16;
 
 let presentInterval = 1;
 
@@ -63,7 +63,7 @@ let resetScissorBefore = true;
 //Draw loop
 let framesRendered = 0;
 
-let frameOffset = 213;
+let frameOffset = 0;
 
 let isFirstIteration = true;
 
@@ -126,7 +126,7 @@ async function drawLoop() {
             if (partitionY > partitions) {
                 
                 raymarcher.gl.finish();
-                await fetch(`http://localhost:42064/cube/frame${framesRendered + frameOffset}.png`, {
+                await fetch(`http://localhost:42064/fractalsphere/frame${framesRendered + frameOffset}.png`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "image/png"
@@ -143,7 +143,8 @@ async function drawLoop() {
                 raymarcher.gl.scissor(0, 0, c.width, c.height);
                 await raymarcher.recompileShader();
                 await raymarcher.renderSingleFrame();
-                resetScissor = true;
+                sampleIndex = -1;
+                resetScissorBefore = true;
                 isFirstIteration = true;
             }
         }
@@ -160,20 +161,26 @@ async function drawLoop() {
 
 (async () => {
 
-    let req = await fetch("./recordings/cubezoom.json");
+    let req = await fetch("./recordings/fractalloop.json");
     let json = await req.json();
     console.log(json);
     json.forEach((e, i) => {
-        //delete e.cubeSize;
+        delete e.cubeSize;
+        delete e.speed;
+        e.resolution = [1920, 1080];
         e.additiveBlending = true;
-        e.uBlendFactor = 0.02;
+        e.uBlendFactor = 0.05;
         e.uTime = i;
-        
-        e.reflections = 5;
+        e.uTimeMotionBlurFactor = 2;
 
-        e.uDOFStrength = 0.1;
-        e.uFocalPlaneDistance = 5;
-        e.uShadowSoftness = 0.5;
+        e.reflections = 1;
+
+        //e.uDOFStrength = 0.1;
+        //e.uFocalPlaneDistance = 5;
+        //e.uShadowSoftness = 0.01;
+
+        e.raymarchingSteps = 64;
+        e.uRayHitThreshold = 0.00001;
         //e.uTimeMotionBlurFactor = 15;
         // e.reflections = 5;
         // e.reflectionRoughness = 0.5;
@@ -198,9 +205,14 @@ async function drawLoop() {
         }
     });
     //json = JSON.stringify(json.slice(1200));
-    frames = json.splice(frameOffset);
-    console.log(composeThis);
-    composeThis = Raymarcher.composeShaderState(json);
+    if (frameOffset == 0) {
+        frames = json;
+        composeThis = frames[0];
+    } else {
+        frames = json.splice(frameOffset);
+        console.log(composeThis);
+        composeThis = Raymarcher.composeShaderState(json);
+    }
 
     //let fullFrames = JSON.parse(json);
     //frames = JSON.parse(json);

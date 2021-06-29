@@ -30,6 +30,10 @@ Its parameters are as follows:
 - out bool metallic:
     This determines whether diffuse 
     or metallic shading will be used.
+- out bool background:
+    Determines whether the ray hit the
+    background. If true, color is used as-is
+    (no shading).
 Calculate the last three parameters assuming
 that the parameter position lies near 
 the surface of the object (color, roughness, and metallic
@@ -37,7 +41,7 @@ are only calculated for the final position of a ray)
 */
 uniform float cubeSize;
 
-float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic) {
+float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic, out bool background) {
     //unique index for each cube
     ivec3 index = ivec3(position / 2.0);
 
@@ -46,6 +50,8 @@ float globalSDF(vec3 position, out vec3 color, out float roughness, out bool met
 
     //make alternating cubes metallic
     metallic = (index.x + index.y + index.z) % 2 == 0;
+
+    background = false;
 
     //calculate metallic roughness (increases with positive x);
     roughness = float(index.x) * 0.01;

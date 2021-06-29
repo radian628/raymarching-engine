@@ -123,7 +123,7 @@ vec4 quatAngleAxis(float angle, vec3 axis) {
 float time;
 
 //SDF_START
-float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic) {
+float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic, out bool background) {
     metallic = true;
     //return fractalSDF(/*mod(rayPosition + vec3(1.0f), 2f) - vec3(1.0f)*/position, vec3(2.0, 2.0, 2.0), 2.0, color, roughness);
 
@@ -166,7 +166,8 @@ float globalSDF(vec3 position, out vec3 color, out float roughness, out bool met
 float globalSDF(vec3 position, out vec3 color) {
     float dummyRoughness;
     bool dummyMetallic;
-    return globalSDF(position, color, dummyRoughness, dummyMetallic);
+    bool dummyBackground;
+    return globalSDF(position, color, dummyRoughness, dummyMetallic, dummyBackground);
 }
 
 float globalSDF(vec3 position) {
@@ -175,7 +176,7 @@ float globalSDF(vec3 position) {
 }
 
 //march a single ray
-vec3 marchCameraRay(vec3 origin, vec3 direction, out float finalMinDist, out int stepsBeforeThreshold, out vec3 color, out float roughness, out bool metallic) {
+vec3 marchCameraRay(vec3 origin, vec3 direction, out float finalMinDist, out int stepsBeforeThreshold, out vec3 color, out float roughness, out bool metallic, out bool background) {
 	vec3 directionNormalized = normalize(direction);
 	vec3 position = origin;
 	float minDist = 0.0;
@@ -187,7 +188,7 @@ vec3 marchCameraRay(vec3 origin, vec3 direction, out float finalMinDist, out int
             break;
 		}
 	}
-    globalSDF(position, color, roughness, metallic);
+    globalSDF(position, color, roughness, metallic, background);
 	finalMinDist = minDist;
 	return position;
 }
@@ -235,8 +236,8 @@ vec3 marchShadowRay(vec3 origin, vec3 direction, out float finalMinDist, out int
 	return position;
 }
 
-vec3 marchRayTrio(vec3 coords, vec3 direction, out float finalMinDist, out int stepsBeforeThreshold, out vec3 normal, out vec3 color, out float roughness, out bool metallic) {
-	vec3 dist = marchCameraRay(coords, direction, finalMinDist, stepsBeforeThreshold, color, roughness, metallic);
+vec3 marchRayTrio(vec3 coords, vec3 direction, out float finalMinDist, out int stepsBeforeThreshold, out vec3 normal, out vec3 color, out float roughness, out bool metallic, out bool background) {
+	vec3 dist = marchCameraRay(coords, direction, finalMinDist, stepsBeforeThreshold, color, roughness, metallic, background);
     vec3 dirNormal1 = normalize(cross(direction, vec3(1.0, 1.0, 1.0)));
     vec3 dirNormal2 = normalize(cross(direction, dirNormal1));
     vec3 nDistX = marchNormalFindingRay(dist + dirNormal1 * 0.00024, direction);
@@ -326,13 +327,19 @@ void main() {
             vec3 color;
             float roughness;
             bool metallic;
-            vec3 rayHit = marchRayTrio(rayStartPos, cameraRay, distToSurface, steps1, normal, color, roughness, metallic);
+            bool background;
+            vec3 rayHit = marchRayTrio(rayStartPos, cameraRay, distToSurface, steps1, normal, color, roughness, metallic, background);
             
             float shadowDistToSurface = 0.0;
             int shadowSteps = STEPS;
             vec3 shadowRayHit1 = marchShadowRay(rayHit + (uLambertLightLocation2 - rayHit) * uRayHitThreshold * 10.0, (uLambertLightLocation2 - rayHit), shadowDistToSurface, shadowSteps);
 
-            outColor += getColor(rayHit, normal, steps1, shadowRayHit1, color);
+            if (background) {
+                outColor = color;
+                break;
+            } else {
+                outColor += getColor(rayHit, normal, steps1, shadowRayHit1, color);
+            }
 
             vec3 reflectVec = reflect(cameraRay, normal);
 
@@ -364,7 +371,7 @@ void main() {
     }
     outColor /= float(REFLECTIONS * SAMPLESPERFRAME);
     outColor *= 2.0;
-    outColor = rgbAsymptote(outColor);
+    outColor = abs(rgbAsymptote(outColor));
 
     #ifdef ADDITIVE
     fragColor = vec4(outColor, 1.0) * uBlendFactor + vec4(texture(uPrevFrame, vTexCoord).rgb, 1.0);//vec4(outColor * (1.0 - float(steps1) / float(STEPS)) * colorFactor, 1.0);

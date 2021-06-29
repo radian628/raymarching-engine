@@ -1,18 +1,19 @@
 /*ui
-[{
-    id: "speed",
-    type: "range",
-    min: 0,
-    max: 5,
-    value: 1,
-    step: 0.001,
-    label: "Speed",
-    description: "Speed at which the cubes move."
-}]
+
+    [{
+        id: "speed",
+        type: "range",
+        min: 0,
+        max: 5,
+        value: 1,
+        label: "Speed",
+        description: "Speed at which the cubes move."
+    }]
+
 */
 uniform float speed;
 
-float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic) {
+float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic, out bool background) {
     metallic = true;
 
     float timeScaled = time * 0.01 * speed;

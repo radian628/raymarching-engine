@@ -15,7 +15,7 @@ float cubeSDF(vec3 rayPosition, vec3 cubePosition, float cubeSize, out vec3 colo
 }
 
 //fractal SDF
-float fractalSDF(vec3 rayPosition, vec3 spherePosition, float sphereRadius, out vec3 color, out float roughness) {
+float fractalSDF(vec3 rayPosition, vec3 spherePosition, float sphereRadius, out vec3 color, out float roughness, out bool background) {
 	vec3 rayPos2 = rayPosition;
     float minDist = 99999.9;
     float minDist2 = 99999.9;
@@ -28,11 +28,15 @@ float fractalSDF(vec3 rayPosition, vec3 spherePosition, float sphereRadius, out 
 	}
 	float result = cubeSDF(rayPos2, spherePosition, sphereRadius, color) * pow(0.5, 8.0);
     color = texture(img, vec2(minDist, minDist2)).rgb;
+    if (length(rayPosition) > 100.0) {
+        background = true;
+        color = vec3(0.3, 0.4, 0.6);
+    }
     roughness = 1.0 - color.x;
     return result;
 }
 
-float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic) {
+float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic, out bool background) {
     metallic = true;
-    return fractalSDF(position, vec3(2.0, 2.0, 2.0), 2.0, color, roughness);
+    return fractalSDF(position, vec3(2.0, 2.0, 2.0), 2.0, color, roughness, background);
 }

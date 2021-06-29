@@ -154,6 +154,7 @@ function getUIComment(shaderSource) {
     let uiCommentMatches = shaderSource.match(/\/\*ui[\s\S]*?\*\//g);
     if (uiCommentMatches) {
         let uiComment = uiCommentMatches[0].slice(4, -2);
+        console.log(uiComment);
         let uiObject = eval(uiComment);
         //console.log(uiObject, uiComment);
         return { settings: uiObject };
@@ -437,7 +438,7 @@ class Raymarcher {
                 gl.TEXTURE_2D, 0, gl.RGBA, 2048, 2048, 0, gl.RGBA, gl.UNSIGNED_BYTE, img
             );
         }
-        img.src = "image.png";
+        img.src = "recordings/image2.png";
         
         
         //======= CURRENT FRAME =========
@@ -515,7 +516,7 @@ class Raymarcher {
     registerCustomUniforms() {
         let customUniforms = getUIComment(this.shaderState.signedDistanceFunction);
         console.log(customUniforms)
-        if (customUniforms) {
+        if (customUniforms && customUniforms.settings) {
             customUniforms = customUniforms.settings;
             customUniforms.forEach(uniform => {
                 this.registerShaderState(uniform.id, { uniform: true, uniformType: uniform.uniformType || "1f" }); 

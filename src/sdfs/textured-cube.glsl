@@ -1,4 +1,4 @@
-float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic) {
+float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic, out bool background) {
     roughness = 0.0;
     metallic = false;
     vec3 tc = position * 0.5 - vec3(0.5);
