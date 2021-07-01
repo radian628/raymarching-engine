@@ -19,11 +19,22 @@ async function getBody(req) {
 }
 
 const requestHandler = async (request, response) => {
-    if (request.method.toUpperCase() == "POST") {
+    console.log(request.method)
+    if (request.method.toUpperCase() == "PUT") {
+        console.log("Request received: " + request.url);
         let body = await getBody(request);
         body = Buffer.from(body.split(",")[1], 'base64');
         await fs.writeFile(path.join("output", request.url), body);
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.statusCode = 201;
         response.end("Received");
+    }
+
+    if (request.method.toUpperCase() == "OPTIONS") {
+        response.setHeader("Access-Control-Allow-Methods", "PUT");
+        response.setHeader("Access-Control-Allow-Headers", "X-PINGOTHER, Content-Type");
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.end();
     }
 }
 

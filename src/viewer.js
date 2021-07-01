@@ -168,6 +168,18 @@ let raymarcherSettings = {
                 description: "Since rays asymptotically approach the surface of the fractal, they will never truly reach its surface, making it necessary to add a distance threshold, under which the rays will be considered to have hit the surface. This threshold is the Ray Hit Threshold. This setting scales logarithmically. See the Raymarching Steps setting for more information."
             },
             {
+                id: "uNormalDelta",
+                type: "range",
+                min: -8,
+                max: 0,
+                value: -5,
+                label: "Normal Delta",
+                transformer: num => {
+                    return Math.pow(10, num);
+                },
+                description: "The normal of a surface (basically, what direction it's pointing in) is calculated by marching additional rays, slightly offset from the original one. The 'normal delta' value determines how far these additional rays are from the primary one."
+            },
+            {
                 id: "transmissionRaymarchingSteps",
                 type: "range",
                 min: 0,
@@ -199,6 +211,14 @@ let raymarcherSettings = {
                 label: "Samples Per Frame",
                 recompile: true,
                 description: "How many camera rays to cast out per frame."
+            },
+            {
+                id: "reproject",
+                type: "checkbox",
+                value: false,
+                label: "Reproject Previous Frame",
+                recompile: true,
+                description: "Enable blending for this setting to have any effect. By default, blending simply creates a trail, mixing the last and current frame. However, with reprojection enabled, the data from the previous frame is adjusted so that the edges of any object line up with those in the current frame. This way, the sampling done in the previous frame can be used in the current frame, cutting down on needless computation."
             }
         ]
     },
@@ -281,14 +301,52 @@ let uiTabs = {
     },
     "sdf-shader": {
         title: "Signed Distance Function Shader"
+    },
+    "recordings": {
+        title: "Recordings"
+    },
+    "renders": {
+        title: "Render a Recording"
     }
-}
+};
+
+let renderDataTransformer = CodeMirror(document.getElementById("renders"), {
+    mode: "javascript",
+    lineNumbers: true,
+    value: `
+//URL indicating where files should be sent
+//%INDEX% is replaced with the frame index (starts at zero)
+//Files will be sent with a PUT request.
+//Handle CORS stuff on your server if needed.
+renderSettings.url = "http://localhost:42064/frame%INDEX%.png";
+
+//sets the number of samples per pixel per frame
+renderSettings.samples = 4;
+
+//sets the number of screen partitions on both axes 
+//(useful if rendering the entire screen is computationally expensive)
+renderSettings.partitions = 4;
+
+//the variable "rec" has a property "data"
+//this property is an array of objects representing
+//the state of the shader at a given time.
+rec.data.forEach((frame, frameIndex) => {
+    frame.reflections = 4;
+    frame.uShadowBrightness = 0.0;
+    frame.uAOStrength = 0.0;
+});
+    `
+});
 
 function createRaymarcherSettingsMenu(settingsContainer, uiContainer, settings, inputHandler) {
     let currentValues = {};
     let bigHeader = document.createElement("h1");
     settingsContainer.appendChild(bigHeader);
     bigHeader.innerText = "Settings";
+
+    Array.from(document.querySelectorAll(`#${uiContainer.id} .hover-explanation-container`)).forEach(elem => {
+        elem.parentElement.removeChild(elem);
+    });
 
     let hoverExplanationContainer = document.createElement("div");
     hoverExplanationContainer.className = "hover-explanation-container";
@@ -361,7 +419,7 @@ function createRaymarcherSettingsMenu(settingsContainer, uiContainer, settings, 
                 label.addEventListener("mouseover", e => {
                     hoverExplanationHeader.innerText = setting.label;
                     hoverExplanationDescription.innerText = setting.description || "No description provided.";
-                    hoverExplanationContainer.style.top = `${label.getBoundingClientRect().y - hoverExplanationContainer.getBoundingClientRect().height / 2}px`;
+                    //hoverExplanationContainer.style.top = `${label.getBoundingClientRect().y - hoverExplanationContainer.getBoundingClientRect().height / 2}px`;
                 });
 
                 settingsContainer.appendChild(label);
@@ -402,6 +460,10 @@ function createUITabs(tabSwitcher, elemData) {
     hideAll();
 }
 
+function deleteAllChildren(elem) {
+    while (elem.children.length > 0) elem.removeChild(elem.lastChild);
+}
+
 
 c.requestPointerLock = c.requestPointerLock ||
                             c.mozRequestPointerLock;
@@ -421,9 +483,9 @@ function pointerLockHandler(e) {
     pointerLockEnabled = document.pointerLockElement === c ||
     document.mozPointerLockElement === c;
     if (pointerLockEnabled && rmSettings.hideUI) {
-        document.getElementById("ui-container").style.opacity = 0;
+        document.getElementById("ui-tabs").style.opacity = 0;
     } else {
-        document.getElementById("ui-container").style.opacity = null;
+        document.getElementById("ui-tabs").style.opacity = null;
     }
 }
 
@@ -458,7 +520,9 @@ var playerTransform = {
 };
 
 window.addEventListener("resize", evt => {
-    raymarcher.setShaderState("resolution", [window.innerWidth, window.innerHeight]);
+    if (!isRendering) {
+        raymarcher.setShaderState("resolution", [window.innerWidth, window.innerHeight]);
+    }
 });
 
 //Initialize the stuff
@@ -487,6 +551,8 @@ function initSettingsMenu() {
 );
 }
 
+let tiledRenderer;
+
 async function init() {
 
     createUITabs(document.getElementById("tab-switcher"), uiTabs);
@@ -494,6 +560,8 @@ async function init() {
     raymarcher = new Raymarcher(createCanvasGraphicsInterface(c));
     raymarcher.setShaderState("resolution", [window.innerWidth, window.innerHeight]);
     await raymarcher.init();
+    tiledRenderer = new TiledRenderer();
+    await tiledRenderer.init(raymarcher);
     //while (uiElem.h) uiElem.removeChild(uiElem.lastChild);
     initSettingsMenu();
 
@@ -530,99 +598,224 @@ async function init() {
     drawLoop();
 }
 
-let recording = [];
+function addRecording(recording, whereToPutRecordings) {
+    let container = document.createElement("div");
+    container.className = "single-recording";
+    whereToPutRecordings.appendChild(container);
+
+    let recordingTitle = document.createElement("h3");
+    recordingTitle.innerText = recording.title;
+    container.appendChild(recordingTitle);
+    
+    let recordingInfo = document.createElement("p");
+    recordingInfo.innerText = `Length: ${recording.data.length} frames`;
+    container.appendChild(recordingInfo);
+
+    let playRecording = document.createElement("button");
+    playRecording.innerText = "Play";
+    playRecording.addEventListener("click", () => {
+        isDoingPlayback = true;
+        recordingToPlay = recording;
+        playbackFrame = 0;
+    });
+    container.appendChild(playRecording);
+}
+
+function regenerateRecordingSelector(selectElem, listOfRecordings) {
+    deleteAllChildren(selectElem);
+    listOfRecordings.forEach(rec => {
+        let option = document.createElement("option");
+        option.innerText = rec.title;
+        option.value = rec.title;
+
+        selectElem.appendChild(option);
+    });
+}
+
+let recordingSelector = document.getElementById("select-recording");
+
+let renderRecordingButton = document.getElementById("render-recording");
+renderRecordingButton.addEventListener("click", function () {
+    savedViewerRaymarcherState = raymarcher.getAllShaderState();
+
+    let code = renderDataTransformer.getValue();
+
+    let recordingName = recordingSelector.value;
+    let recording;
+    allRecordings.forEach(rec => {
+        if (recordingName == rec.title) recording = rec;
+    });
+
+    let transformerFunc = new Function("rec", "renderSettings", code);
+    let renderSettings = {
+        partitions: 4,
+        samples: 1,
+        url: "http://localhost:42064/test/frame%INDEX%.png"
+    };
+
+    transformerFunc(recording, renderSettings);
+    Raymarcher.removeDuplicateState(recording.data, );
+
+    tiledRenderer.startRender(recording.data, renderSettings.partitions, renderSettings.samples, renderSettings.url);
+    isRendering = true;
+});
+let isRendering = false;
+
+let currentRecording = [];
 let isRecording = false;
+
+let allRecordings = [];
 
 let lightLocation = [0, 0, 0];
 //Draw loop
 var t = 0;
+
+let viewerStatistics = document.getElementById("statistics");
+
+let prevTime = Date.now();
+let avgFPSes = [];
+
+let isDoingPlayback = false;
+let recordingToPlay;
+let playbackFrame = 0;
+
+let savedViewerRaymarcherState;
+
 async function drawLoop() {
-    t++;
-    var acceleration = [0, 0, 0]
-    
-    let xRotation = quatAngleAxis(playerTransform.rotation[0] * -rmSettings.cameraAccel, vectorQuaternionMultiply(playerTransform.quatRotation, [0, 0, 1]));
-    let yRotation = quatAngleAxis(playerTransform.rotation[1] * -rmSettings.cameraAccel, vectorQuaternionMultiply(playerTransform.quatRotation, [1, 0, 0]));
-
-    playerTransform.rotation = scalarMultiply(playerTransform.rotation, rmSettings.cameraSmoothness);
-
-    playerTransform.quatRotation = quatMultiply(xRotation, playerTransform.quatRotation);
-    playerTransform.quatRotation = quatMultiply(yRotation, playerTransform.quatRotation);
-    playerTransform.quatRotation = normalize(playerTransform.quatRotation);
-
-    if (keys.w) {
-        acceleration[1] += 0.01;
-    }
-    if (keys.a) {
-        acceleration[0] += -0.01;
-    }
-    if (keys.s) {
-        acceleration[1] += -0.01;
-    }
-    if (keys.d) {
-        acceleration[0] += 0.01;
-    }
-    if (keys.shift) {
-        acceleration[2] += -0.01;
-    }
-    if (keys[" "]) {
-        acceleration[2] += 0.01;
-    }
-    if (keys.e || t == 1) {
-        lightLocation = playerTransform.position.concat();
-        raymarcher.setShaderState("uLambertLightLocation", lightLocation);
-        console.log(raymarcher.uLambertLightLocation);
-    }
-    if (singleFrameKeys.r) {
-        isRecording = !isRecording;
-        if (!isRecording) {
-            Raymarcher.removeDuplicateState(recording);
-            console.log(JSON.stringify(recording));
-            recording = [];
+    if (isRendering) {
+        await tiledRenderer.nextFrame();
+        if (tiledRenderer.done || keys.x) {
+            isRendering = false;
+            tiledRenderer.endRender();
+            raymarcher.setAllShaderState(savedViewerRaymarcherState);
         }
+
+
+    } else {
+
+        t++;
+        var acceleration = [0, 0, 0]
+        
+        let xRotation = quatAngleAxis(playerTransform.rotation[0] * -rmSettings.cameraAccel, vectorQuaternionMultiply(playerTransform.quatRotation, [0, 0, 1]));
+        let yRotation = quatAngleAxis(playerTransform.rotation[1] * -rmSettings.cameraAccel, vectorQuaternionMultiply(playerTransform.quatRotation, [1, 0, 0]));
+    
+        playerTransform.rotation = scalarMultiply(playerTransform.rotation, rmSettings.cameraSmoothness);
+    
+        playerTransform.quatRotation = quatMultiply(xRotation, playerTransform.quatRotation);
+        playerTransform.quatRotation = quatMultiply(yRotation, playerTransform.quatRotation);
+        playerTransform.quatRotation = normalize(playerTransform.quatRotation);
+    
+        if (keys.w) {
+            acceleration[1] += 0.01;
+        }
+        if (keys.a) {
+            acceleration[0] += -0.01;
+        }
+        if (keys.s) {
+            acceleration[1] += -0.01;
+        }
+        if (keys.d) {
+            acceleration[0] += 0.01;
+        }
+        if (keys.shift) {
+            acceleration[2] += -0.01;
+        }
+        if (keys[" "]) {
+            acceleration[2] += 0.01;
+        }
+        if (keys.e || t == 1) {
+            lightLocation = playerTransform.position.concat();
+            raymarcher.setShaderState("uLambertLightLocation", lightLocation);
+            console.log(raymarcher.uLambertLightLocation);
+        }
+        if (singleFrameKeys.r) {
+            isRecording = !isRecording;
+            if (!isRecording) {
+                Raymarcher.removeDuplicateState(currentRecording);
+                allRecordings.push({
+                    data: currentRecording,
+                    title: `recording${allRecordings.length}`
+                });
+                addRecording(allRecordings[allRecordings.length - 1], document.getElementById("recordings"));
+                regenerateRecordingSelector(recordingSelector, allRecordings);
+                currentRecording = [];
+            }
+        }
+        if (keys.x) {
+            isDoingPlayback = false;
+        }
+    
+    
+        if (isDoingPlayback) {
+            if (playbackFrame >= recordingToPlay.data.length) {
+                playbackFrame = 0;
+            }
+            raymarcher.setAllShaderState(recordingToPlay.data[playbackFrame]);
+            playbackFrame++;
+            raymarcher.renderSingleFrame();
+            raymarcher.presentFramebuffer();
+        } else {
+            acceleration = acceleration.map(e => { return e * rmSettings.playerSpeed; });
+    
+            acceleration = vectorQuaternionMultiply(playerTransform.quatRotation, acceleration);
+            playerTransform.velocity = playerTransform.velocity.map((e, i) => { return e + acceleration[i]; });
+            playerTransform.position = playerTransform.position.map((e, i) => { return e + playerTransform.velocity[i]; });
+            playerTransform.velocity = playerTransform.velocity.map(e => { return e * rmSettings.playerSmoothness; });
+    
+            raymarcher.setShaderState("uPosition", playerTransform.position);
+    
+            raymarcher.setShaderState("uTime", t);
+    
+            //raymarcher.position = playerTransform.position;
+            raymarcher.setShaderState("rotation", playerTransform.quatRotation);
+    
+            // let fractalRotateQuat = [0, 1, 0, 0];
+    
+            // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation1, [1, 0, 0]));
+            // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation2, [0, 1, 0]));
+            // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation3, [0, 0, 1]));
+    
+            // raymarcher.uFractalRotation = fractalRotateQuat;
+    
+            if (!rmSettings.motionBlur) {
+                raymarcher.setShaderState("uMotionBlurPrevPos", playerTransform.position);
+                raymarcher.setShaderState("uMotionBlurPrevRot", playerTransform.quatRotation);
+            }
+            raymarcher.renderSingleFrame();
+            raymarcher.presentFramebuffer();
+            if (rmSettings.motionBlur) {
+                raymarcher.setShaderState("uMotionBlurPrevPos", playerTransform.position);
+                raymarcher.setShaderState("uMotionBlurPrevRot", playerTransform.quatRotation);
+            }
+            raymarcher.setShaderState("uPrevPos", playerTransform.position);
+            raymarcher.setShaderState("uPrevRot", playerTransform.quatRotation);
+        }
+        if (isRecording) {
+            let shaderState = raymarcher.getAllShaderState();
+            currentRecording.push(shaderState);
+        };
+    
+        let now = Date.now();
+        let renderTimeInterval = now - prevTime;
+        prevTime = now;
+    
+        let fps = Math.round(1000 / renderTimeInterval * 10) / 10;
+        avgFPSes.push(fps);
+        if (avgFPSes.length > 10) {
+            avgFPSes.splice(0, 1);
+        }
+    
+        let averageFPS = Math.round(avgFPSes.reduce((prev, cur) => prev + cur, 0) / avgFPSes.length * 10) / 10;
+    
+        viewerStatistics.innerHTML = 
+            `FPS: ${fps}`.padEnd(15, "\xa0") + 
+            `Average FPS (last 10 frames): ${averageFPS}`.padEnd(40, "\xa0") + 
+            (isRecording ? 
+                `<span style="color:red">RECORDING (${currentRecording.length} Frames)</span>` : 
+                (isDoingPlayback ? `<span style="color: #FFFF00">PLAYING ${recordingToPlay.title} (Frame ${playbackFrame})</span>` : `<span style="color: #00FF00">NOT RECORDING</span>`));
+    
+        singleFrameKeys = {};    
     }
-
-
-
-    acceleration = acceleration.map(e => { return e * rmSettings.playerSpeed; });
-
-    acceleration = vectorQuaternionMultiply(playerTransform.quatRotation, acceleration);
-    playerTransform.velocity = playerTransform.velocity.map((e, i) => { return e + acceleration[i]; });
-    playerTransform.position = playerTransform.position.map((e, i) => { return e + playerTransform.velocity[i]; });
-    playerTransform.velocity = playerTransform.velocity.map(e => { return e * rmSettings.playerSmoothness; });
-
-    raymarcher.setShaderState("uPosition", playerTransform.position);
-
-    raymarcher.setShaderState("uTime", t);
-
-    //raymarcher.position = playerTransform.position;
-    raymarcher.setShaderState("rotation", playerTransform.quatRotation);
-
-    // let fractalRotateQuat = [0, 1, 0, 0];
-
-    // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation1, [1, 0, 0]));
-    // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation2, [0, 1, 0]));
-    // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation3, [0, 0, 1]));
-
-    // raymarcher.uFractalRotation = fractalRotateQuat;
-
-    if (!rmSettings.motionBlur) {
-        raymarcher.setShaderState("uMotionBlurPrevPos", playerTransform.position);
-        raymarcher.setShaderState("uMotionBlurPrevRot", playerTransform.quatRotation);
-    }
-    raymarcher.renderSingleFrame();
-    raymarcher.presentFramebuffer();
-    if (rmSettings.motionBlur) {
-        raymarcher.setShaderState("uMotionBlurPrevPos", playerTransform.position);
-        raymarcher.setShaderState("uMotionBlurPrevRot", playerTransform.quatRotation);
-    }
-
-    if (isRecording) {
-        let shaderState = raymarcher.getAllShaderState();
-        recording.push(shaderState);
-    };
-
-    singleFrameKeys = {};
-
     requestAnimationFrame(drawLoop);
 }
 

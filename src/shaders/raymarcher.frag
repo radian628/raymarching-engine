@@ -33,8 +33,13 @@ uniform float uLightStrength;
 
 uniform vec3 uMotionBlurPrevPos;
 uniform vec4 uMotionBlurPrevRot;
+
+uniform vec3 uPrevPos;
+uniform vec4 uPrevRot;
+
 uniform float uTimeMotionBlurFactor;
 
+uniform float uNormalDelta;
 
 in highp vec2 vTexCoord; 
 layout(location = 0) out vec4 fragColor;
@@ -114,6 +119,12 @@ vec3 rotateQuat(vec3 position, vec4 q)
 
 vec4 quatAngleAxis(float angle, vec3 axis) {
     return vec4(cos(angle), axis * sin(angle));
+}
+
+vec4 quatInverse(vec4 q) {
+    vec4 conj;
+    conj.yzwx = vec4(-q.yzw, q.x);
+    return conj / dot(q, q);
 }
 
 //REPLACE_START(globalSDF)
@@ -240,8 +251,8 @@ vec3 marchRayTrio(vec3 coords, vec3 direction, out float finalMinDist, out int s
 	vec3 dist = marchCameraRay(coords, direction, finalMinDist, stepsBeforeThreshold, color, roughness, metallic, background);
     vec3 dirNormal1 = normalize(cross(direction, vec3(1.0, 1.0, 1.0)));
     vec3 dirNormal2 = normalize(cross(direction, dirNormal1));
-    vec3 nDistX = marchNormalFindingRay(dist + dirNormal1 * 0.00024, direction);
-    vec3 nDistY = marchNormalFindingRay(dist + dirNormal2 * 0.00024, direction);
+    vec3 nDistX = marchNormalFindingRay(dist + dirNormal1 * uNormalDelta, direction);
+    vec3 nDistY = marchNormalFindingRay(dist + dirNormal2 * uNormalDelta, direction);
     normal = -normalize(cross(dist - nDistX, dist - nDistY));
     return dist;
 }
@@ -290,6 +301,8 @@ void main() {
     vec3 outColor = vec3(0.0);
     seed = vTexCoord + vec2(uNoiseSeed);
 
+    vec3 primaryRayHit;
+
     for (int samples = 0; samples < int(SAMPLESPERFRAME); samples++) {
         time = uTime + biasToCenter(rand()) * uTimeMotionBlurFactor;
 
@@ -331,7 +344,7 @@ void main() {
             vec3 rayHit = marchRayTrio(rayStartPos, cameraRay, distToSurface, steps1, normal, color, roughness, metallic, background);
             
             float shadowDistToSurface = 0.0;
-            int shadowSteps = STEPS;
+            int shadowSteps = 0;
             vec3 shadowRayHit1 = marchShadowRay(rayHit + (uLambertLightLocation2 - rayHit) * uRayHitThreshold * 10.0, (uLambertLightLocation2 - rayHit), shadowDistToSurface, shadowSteps);
 
             if (background) {
@@ -367,17 +380,40 @@ void main() {
             } else {
                 cameraRay = hemisphericalSample(normal);
             }
+
+            if (i == 0) primaryRayHit = rayHit;
         }
     }
     outColor /= float(REFLECTIONS * SAMPLESPERFRAME);
     outColor *= 2.0;
     outColor = abs(rgbAsymptote(outColor));
 
-    #ifdef ADDITIVE
-    fragColor = vec4(outColor, 1.0) * uBlendFactor + vec4(texture(uPrevFrame, vTexCoord).rgb, 1.0);//vec4(outColor * (1.0 - float(steps1) / float(STEPS)) * colorFactor, 1.0);
+    vec4 lastFrameSample; 
+
+    #ifdef REPROJECT
+    vec3 pixelAtLastFrame = rotateQuat((primaryRayHit - uPrevPos), quatInverse(uPrevRot));
+    vec2 reprojectedTexCoords = ((pixelAtLastFrame.xz / pixelAtLastFrame.y) / (uFOV * 1.5) * vec2(uViewportSize.y / uViewportSize.x, 1.0)) + vec2(0.5);
+
+    //gl_FragCoord.xyz / (uViewportSize.y) - vec3(uViewportSize.x / uViewportSize.y * 0.5, 0.5, 0.0);
+    if (clamp(reprojectedTexCoords, 0.0, 1.0) == reprojectedTexCoords) {
+        lastFrameSample = texture(uPrevFrame, reprojectedTexCoords);
+        if (abs(lastFrameSample.a - length(pixelAtLastFrame)) / lastFrameSample.a > 0.05) {
+            lastFrameSample = vec4(0.0);
+        }
+    } else {
+        lastFrameSample = vec4(outColor, 1.0);
+    }
     #else
-    fragColor = mix(vec4(outColor, 1.0), vec4(texture(uPrevFrame, vTexCoord).rgb, 1.0), uBlendFactor);
+    lastFrameSample = texture(uPrevFrame, vTexCoord);
     #endif
+
+    #ifdef ADDITIVE
+    fragColor = vec4(outColor, 1.0) * uBlendFactor + lastFrameSample.rgb, 1.0);//vec4(outColor * (1.0 - float(steps1) / float(STEPS)) * colorFactor, 1.0);
+    #else
+    fragColor = mix(vec4(outColor, 1.0), vec4(lastFrameSample.rgb, 1.0), uBlendFactor);
+    #endif
+
+    fragColor.a = distance(uPosition, primaryRayHit);
 
     #ifdef RESET
     fragColor = vec4(0.0, 0.0, 0.0, 1.0);

@@ -2,6 +2,7 @@
 <html>
     <head>
         <link rel="stylesheet" type="text/css" href="viewer.css">
+        <link rel="stylesheet" type="text/css" href="codemirror/lib/codemirror.css">
     </head>
     <body>
         <canvas width="1920" height="1080" id="canvas"></canvas>
@@ -25,8 +26,27 @@
                     <option value="fractalsphere.glsl">fractalsphere.glsl</option>
                 </select>
             </div>
+            <div id="recordings">
+                <h2>Recordings</h2>
+                <p>Press R to start or stop a recording. When playing a recording back, press X to exit recording playback.</p>
+                <div id="list-of-recordings">
+
+                </div>
+            </div>
+            <div id="renders">
+                <button id="render-recording">Render Recording</button>
+                <select id="select-recording">
+
+                </select>
+            </div>
         </div>
+        <div id="statistics">
+
+        </div>
+        <script src="codemirror/lib/codemirror.js"></script>
+        <script src="codemirror/javascript.js"></script>
         <script src="./raymarcher.js"></script>
+        <script src="./renderer.js"></script>
         <script src="viewer.js"></script>
     </body>
 </html>

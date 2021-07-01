@@ -272,7 +272,8 @@ function createCanvasGraphicsInterface(canvas) {
             set height (height) {
                 canvas.height = height;
             }
-        }
+        },
+        canvas: canvas
     };
     console.log(gi);
     return gi;
@@ -282,8 +283,10 @@ function createCanvasGraphicsInterface(canvas) {
 class Raymarcher {
     constructor(graphicsInterface) {
         this.surface = graphicsInterface.surface;
+        this.canvas = graphicsInterface.canvas;
         this.gl = graphicsInterface.gl;
         this.gl.getExtension("EXT_color_buffer_float");
+        this.gl.getExtension("OES_texture_float_linear");
 
         this.recompileNextFrame = false;
         this.recreateFramebuffers = false;
@@ -307,6 +310,8 @@ class Raymarcher {
             rotation: { uniform: true, uniformType: "4fv" },
             uMotionBlurPrevPos: { uniform: true, uniformType: "3fv" },
             uMotionBlurPrevRot: { uniform: true, uniformType: "4fv" },
+            uPrevPos: { uniform: true, uniformType: "3fv" },
+            uPrevRot: { uniform: true, uniformType: "4fv" },
             uShadowBrightness: { uniform: true, uniformType: "1f" },
             uAOStrength: { uniform: true, uniformType: "1f" },
             uShadowSoftness: { uniform: true, uniformType: "1f" },
@@ -319,6 +324,7 @@ class Raymarcher {
             uLambertLightLocation: { uniform: true, uniformType: "3fv" },
             uTimeMotionBlurFactor: { uniform: true, uniformType: "1f" },
             uTime: { uniform: true, uniformType: "1f" },
+            uNormalDelta: { uniform: true, uniformType: "1f" },
 
             raymarchingSteps: { recompile: true },
             normalRaymarchingSteps: { recompile: true },
@@ -327,6 +333,7 @@ class Raymarcher {
             transmissionRayCount: { recompile: true },
             samplesPerFrame: { recompile: true },
             additiveBlending: { recompile: true },
+            reproject: { recompile: true },
             signedDistanceFunction: { recompile: true },
             resolution: { recompile: true, resize: true }
         };
@@ -378,7 +385,7 @@ class Raymarcher {
         let currentState = {};
         shaderStateList.forEach(shaderState => {
             Object.keys(shaderState).forEach(key => {
-                if (shaderState[key] == currentState[key]) {
+                if (vequals(shaderState[key], currentState[key])) {
                     delete shaderState[key];
                 } else {
                     currentState[key] = shaderState[key];
@@ -484,6 +491,14 @@ class Raymarcher {
         this.toneBalanceProg = buildShaderProgram(this.gl, vertShader, fragShader);
     }
 
+    defineIfTrue(fragShader, macroName, cond) {
+        if (cond) {
+            return fragShader.replace("//REPLACEHERE", `//REPLACEHERE\n#define ${macroName}\n`);
+        } else {
+            return fragShader;
+        }
+    }
+
     async recompileShader() {
         var vertShader = (await request("./shaders/vertex.vert")).response;
         var fragShader = (await request("./shaders/raymarcher.frag")).response;
@@ -493,6 +508,7 @@ class Raymarcher {
         fragShader = replaceMacro(fragShader, "TRANSMISSIONSTEPS", this.shaderState.transmissionRaymarchingSteps);
         fragShader = replaceMacro(fragShader, "TRANSMISSIONRAYS", this.shaderState.transmissionRayCount);
         fragShader = replaceMacro(fragShader, "SAMPLESPERFRAME", this.shaderState.samplesPerFrame);
+        fragShader = this.defineIfTrue(fragShader, "REPROJECT", this.shaderState.reproject);
         let replaceText = "";
         if (this.shaderState.additiveBlending) replaceText = "#define ADDITIVE\n" + replaceText;
         if (this.shaderState.additiveBlending) {
