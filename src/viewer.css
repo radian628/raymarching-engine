@@ -9,22 +9,25 @@ canvas {
     top: 0px;
     left: 0px;
     z-index: 0;
+    width: 100vw;
+    height: 100vh
 }
 
-#shader-input {
+.CodeMirror {
+    resize: vertical;
+}
+
+#shader-input-container .CodeMirror {
     z-index: 1;
-    margin: 20px;
-    background: black;
-    color: white;
-    font-family: monospace;
+    margin-top: 40px;
     height: 80vh;
     width: 30vw;
+    resize: vertical;
+    width: 100%;
+    height: calc(100% - 30px);
 }
 
 #sdf-shader {
-    top: 0px;
-    left: 0px;
-    position: absolute;
     overflow-x: initial;
     overflow-wrap: break-word;
     color: white;
@@ -91,6 +94,7 @@ canvas {
 }
 
 #ui-tabs {
+    padding-top: 40px;
     opacity: 0.5;
     transition: opacity, 0.3s;
     background: black;
@@ -134,7 +138,7 @@ h1, h2 {
 #settings {
     overflow: auto;
     flex: 1;
-    max-height: 80vh;
+    max-height: 60vh;
 }
 
 .hover-explanation-container {
@@ -146,7 +150,7 @@ h1, h2 {
 }
 
 #ui-container {
-    height: 100vh;
+    max-height: 100vh;
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -160,4 +164,12 @@ h1, h2 {
 
 #renders {
     margin-top: 20px;
+}
+
+a {
+    color:rgb(173, 219, 255);
+}
+
+a:visited {
+    color:rgb(204, 173, 255);
 }

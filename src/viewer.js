@@ -71,11 +71,29 @@ let raymarcherSettings = {
                 label: "Camera Turn Acceleration",
                 description: "Controls how fast the camera accelerates when turning. Scales logarithmically.",
                 indirect: true
+            },
+            {
+                id: "resolutionFactor",
+                type: "number",
+                value: 1,
+                label: "Resolution Factor",
+                description: "Controls the true resolution of the underlying framebuffer when compared to the screen. Lower values will increase performance, but will cause blurriness due to upscaling.",
+                indirect: true,
+                customChangeHandler: () => {
+                    window.dispatchEvent(new Event("resize"));
+                }
             }
         ]
     },
     "Lighting Controls": {
         settings: [
+            {
+                id: "usePointLightSource",
+                type: "checkbox",
+                value: true,
+                label: "Use point light source.",
+                description: "Allows you to set the position of a single point light source. Direct illumination with the point light source results in very little noise relative to illumination with other light sources (e.g. area lights). However, the point light source also nearly doubles the number of rays that need to be cast. Thus, removing it will lead to a significant increase in performance."
+            },
             {
                 id: "uShadowBrightness",
                 type: "range",
@@ -160,7 +178,7 @@ let raymarcherSettings = {
                 type: "range",
                 min: -8,
                 max: 0,
-                value: -4,
+                value: -5.5,
                 label: "Ray Hit Threshold",
                 transformer: num => {
                     return Math.pow(10, num);
@@ -172,7 +190,7 @@ let raymarcherSettings = {
                 type: "range",
                 min: -8,
                 max: 0,
-                value: -5,
+                value: -3.75,
                 label: "Normal Delta",
                 transformer: num => {
                     return Math.pow(10, num);
@@ -219,7 +237,43 @@ let raymarcherSettings = {
                 label: "Reproject Previous Frame",
                 recompile: true,
                 description: "Enable blending for this setting to have any effect. By default, blending simply creates a trail, mixing the last and current frame. However, with reprojection enabled, the data from the previous frame is adjusted so that the edges of any object line up with those in the current frame. This way, the sampling done in the previous frame can be used in the current frame, cutting down on needless computation."
-            }
+            },
+            {
+                id: "uReprojectionExtraSamples",
+                type: "range",
+                min: 0,
+                max: 10,
+                value: 0,
+                step: 1,
+                label: "Unreprojected Pixel Extra Samples",
+                description: "If reprojection is enabled, pixels for which reprojection failed (i.e. areas which were occluded or not visible in the previous frame) may be sampled additional times in order to reduce noise in those areas. This setting determines how many of these extra samples will be made."
+            },
+            {
+                id: "uStrobe",
+                type: "number",
+                value: 1,
+                step: 1,
+                label: "Render Fraction of Frame",
+                description: "Fully render only 1 / Nth of the framebuffer every frame. Useful for reprojection of computationally expensive scenes when high FPS is desired."
+            },
+            {
+                id: "uReprojectionEdgeThreshold",
+                type: "number",
+                // min: 0,
+                // max: 1,
+                value: 0.05,
+                label: "Reprojection Edge Threshold",
+                description: "Relative depth difference threshold to be considered when reprojecting. Lower values yield sharper edges and more detail at the cost of increased noise and chance of false positives."
+            },
+            {
+                id: "uReprojectionAccumulationLimit",
+                type: "number",
+                // min: 0,
+                // max: 1,
+                value: 64,
+                label: "Reprojection Accumulation Limit",
+                description: "Determines the limit to the number of frames' worth of samples that will be reprojected before previous samples start being replaced. Lower values mean reprojection is better adapted to changes in lighting, but can lead to more noise. Higher values mean reprojection takes longer to update to a change in lighting, but has less noise."
+            },
         ]
     },
     "Camera Controls": {
@@ -240,6 +294,13 @@ let raymarcherSettings = {
                 value: 0.0,
                 label: "Previous Frame Trail",
                 description: "Proportion of current frame to blend with previous. If Additive Blending is enabled, this instead determines how much of the current frame to add to the accumulated samples."
+            },
+            {
+                id: "linearFilterPreviousFrame",
+                type: "checkbox",
+                value: false,
+                label: "Linearly Filter Previous Frame",
+                description: "Linearly filters the previous frame when blending. This dramatically reduces noise when doing reprojection at the cost of the quality of sharp edges."
             },
             {
                 id: "uFOV",
@@ -292,6 +353,44 @@ let raymarcherSettings = {
                 description: "Determines the strength of motion blur for objects in scene."
             }
         ]
+    },
+    "Denoiser Controls": {
+        settings: [
+            {
+                id: "denoise",
+                type: "checkbox",
+                value: false,
+                label: "Denoise",
+                description: "Click to enable denoising."
+            },
+            {
+                id: "uSigma",
+                type: "range",
+                value: 2,
+                min: 0,
+                max: 3,
+                label: "Sigma",
+                description: "Denoising kernel standard deviation."
+            },
+            {
+                id: "uSigmaCoefficient",
+                type: "range",
+                value: 8,
+                min: 0,
+                max: 12,
+                label: "Sigma Coefficient",
+                description: "Denoising kernel sigma coefficient. Sigma * Sigma Coefficient equals denoising radius."
+            },
+            {
+                id: "uSharpeningThreshold",
+                type: "range",
+                value: 0.180,
+                min: 0,
+                max: 0.5,
+                label: "Sharpening Threshold",
+                description: "Denoising kernel edge sharpening threshold."
+            }
+        ]
     }
 }
 
@@ -307,39 +406,17 @@ let uiTabs = {
     },
     "renders": {
         title: "Render a Recording"
+    },
+    "credits": {
+        title: "Credits"
     }
 };
 
-let renderDataTransformer = CodeMirror(document.getElementById("renders"), {
-    mode: "javascript",
-    lineNumbers: true,
-    value: `
-//URL indicating where files should be sent
-//%INDEX% is replaced with the frame index (starts at zero)
-//Files will be sent with a PUT request.
-//Handle CORS stuff on your server if needed.
-renderSettings.url = "http://localhost:42064/frame%INDEX%.png";
-
-//sets the number of samples per pixel per frame
-renderSettings.samples = 4;
-
-//sets the number of screen partitions on both axes 
-//(useful if rendering the entire screen is computationally expensive)
-renderSettings.partitions = 4;
-
-//the variable "rec" has a property "data"
-//this property is an array of objects representing
-//the state of the shader at a given time.
-rec.data.forEach((frame, frameIndex) => {
-    frame.reflections = 4;
-    frame.uShadowBrightness = 0.0;
-    frame.uAOStrength = 0.0;
-});
-    `
-});
+let renderDataTransformer;
 
 function createRaymarcherSettingsMenu(settingsContainer, uiContainer, settings, inputHandler) {
     let currentValues = {};
+    let settingInputs = {};
     let bigHeader = document.createElement("h1");
     settingsContainer.appendChild(bigHeader);
     bigHeader.innerText = "Settings";
@@ -416,6 +493,8 @@ function createRaymarcherSettingsMenu(settingsContainer, uiContainer, settings, 
                 input.addEventListener("input", inputListener);
                 input.addEventListener("change", inputListener);
 
+                if (setting.customChangeHandler) input.addEventListener("change", setting.customChangeHandler);
+
                 label.addEventListener("mouseover", e => {
                     hoverExplanationHeader.innerText = setting.label;
                     hoverExplanationDescription.innerText = setting.description || "No description provided.";
@@ -424,12 +503,40 @@ function createRaymarcherSettingsMenu(settingsContainer, uiContainer, settings, 
 
                 settingsContainer.appendChild(label);
                 label.appendChild(input);
+                settingInputs[setting.id] = input;
                 settingsContainer.appendChild(document.createElement("br"));
             });
         }
     });
 
-    return currentValues;
+    let settingsMenu = {
+        values: currentValues,
+        changeSettings (settingsToChange) {
+            Object.keys(settingsToChange).forEach(key => {
+                let inp = settingInputs[key];
+                inp[inp.type == "checkbox" ? "checked" : "value"] = settingsToChange[key];
+            });
+            this.dispatchAll();
+        },
+        dispatchAll () {
+            Object.keys(settingInputs).forEach(key => {
+                let inp = settingInputs[key];
+                inp.dispatchEvent(new Event("change"));
+            });
+        },
+        getRawInputValueDump () {
+            let values = {};
+            Object.keys(settingInputs).forEach(key => {
+                let inp = settingInputs[key];
+                let value = inp.type == "checkbox" ? inp.checked : inp.value;
+                if (inp.type == "range" || inp.type == "number") value = Number(value);
+                values[key] = value;
+            });
+            return values;
+        }
+    };
+    settingsMenu.dispatchAll();
+    return settingsMenu;
 }
 
 function createUITabs(tabSwitcher, elemData) {
@@ -482,7 +589,7 @@ document.addEventListener('mozpointerlockchange', pointerLockHandler, false);
 function pointerLockHandler(e) {
     pointerLockEnabled = document.pointerLockElement === c ||
     document.mozPointerLockElement === c;
-    if (pointerLockEnabled && rmSettings.hideUI) {
+    if (pointerLockEnabled && rmSettings.values.hideUI) {
         document.getElementById("ui-tabs").style.opacity = 0;
     } else {
         document.getElementById("ui-tabs").style.opacity = null;
@@ -521,7 +628,7 @@ var playerTransform = {
 
 window.addEventListener("resize", evt => {
     if (!isRendering) {
-        raymarcher.setShaderState("resolution", [window.innerWidth, window.innerHeight]);
+        raymarcher.setShaderState("resolution", [window.innerWidth * rmSettings.values.resolutionFactor, window.innerHeight * rmSettings.values.resolutionFactor]);
     }
 });
 
@@ -560,16 +667,15 @@ async function init() {
     raymarcher = new Raymarcher(createCanvasGraphicsInterface(c));
     raymarcher.setShaderState("resolution", [window.innerWidth, window.innerHeight]);
     await raymarcher.init();
-    tiledRenderer = new TiledRenderer();
-    await tiledRenderer.init(raymarcher);
     //while (uiElem.h) uiElem.removeChild(uiElem.lastChild);
     initSettingsMenu();
 
-    let sdfTextarea = document.getElementById("shader-input");
+    //===================================== SDF EDITOR STUFF =====================================
+    let sdfTextarea = CodeMirror.fromTextArea(document.getElementById("shader-input"));
     let changeSDF = () => {
-        raymarcher.setShaderState("signedDistanceFunction", sdfTextarea.value);
+        raymarcher.setShaderState("signedDistanceFunction", sdfTextarea.getValue());
         raymarcher.resetShaderStateInfo();
-        let uiObject = getUIComment(sdfTextarea.value);
+        let uiObject = getUIComment(sdfTextarea.getValue());
         if (uiObject.settings) {
             raymarcherSettings["Shader Controls"] = uiObject;
             uiObject.settings.forEach(setting => {
@@ -581,19 +687,44 @@ async function init() {
         initSettingsMenu();
     }
 
-    sdfTextarea.value = (await request("sdfs/default.glsl")).response;
-    sdfTextarea.addEventListener("change", () => {
+    let updateShaderButton = document.getElementById("update-shader");
+    sdfTextarea.setValue((await request("sdfs/default.glsl")).response);
+    updateShaderButton.addEventListener("click", () => {
         changeSDF();
     });
     changeSDF();
 
     let shaderChooser = document.getElementById("choose-shader");
+
+
     shaderChooser.addEventListener("change", async () => {
         console.log(shaderChooser.value);
-        sdfTextarea.value = (await request(`sdfs/${shaderChooser.value}`)).response;
+        sdfTextarea.setValue((await request(`sdfs/${shaderChooser.value}`)).response);
         //sdfTextarea.value = (await request(`sdfs/${shaderChooser.value}`)).response;
         changeSDF();
     });
+
+    //======================================== SETTING PRESETS ======================================
+
+    let settingPresetChooser = document.getElementById("setting-presets");
+    let applySettingPresetButton = document.getElementById("apply-setting-preset");
+    applySettingPresetButton.addEventListener("click", async () => {
+        rmSettings.changeSettings(JSON.parse((await request(`setting-presets/${settingPresetChooser.value}`)).response));
+    });
+
+
+    renderDataTransformer = CodeMirror(document.getElementById("renders"), {
+        mode: "javascript"
+    });
+    renderDataTransformer.setValue(((await request("recording-transformers/global-illumination-explanation.js")).response));
+
+    let recordingTransformerChooser = document.getElementById("recording-transformer-presets");
+    let applyRecordingTransformerPresetButton = document.getElementById("apply-recording-transformer-preset");
+    applyRecordingTransformerPresetButton.addEventListener("click", async () => {
+        renderDataTransformer.setValue((await request(`recording-transformers/${recordingTransformerChooser.value}`)).response);
+    });
+
+
 
     drawLoop();
 }
@@ -635,34 +766,14 @@ function regenerateRecordingSelector(selectElem, listOfRecordings) {
 let recordingSelector = document.getElementById("select-recording");
 
 let renderRecordingButton = document.getElementById("render-recording");
-renderRecordingButton.addEventListener("click", function () {
-    savedViewerRaymarcherState = raymarcher.getAllShaderState();
-
-    let code = renderDataTransformer.getValue();
-
-    let recordingName = recordingSelector.value;
-    let recording;
-    allRecordings.forEach(rec => {
-        if (recordingName == rec.title) recording = rec;
-    });
-
-    let transformerFunc = new Function("rec", "renderSettings", code);
-    let renderSettings = {
-        partitions: 4,
-        samples: 1,
-        url: "http://localhost:42064/test/frame%INDEX%.png"
-    };
-
-    transformerFunc(recording, renderSettings);
-    Raymarcher.removeDuplicateState(recording.data, );
-
-    tiledRenderer.startRender(recording.data, renderSettings.partitions, renderSettings.samples, renderSettings.url);
-    isRendering = true;
+renderRecordingButton.addEventListener("click", async function () {
+    isWaitingForRendering = true;
 });
 let isRendering = false;
 
 let currentRecording = [];
 let isRecording = false;
+let isWaitingForRendering = false;
 
 let allRecordings = [];
 
@@ -682,65 +793,44 @@ let playbackFrame = 0;
 let savedViewerRaymarcherState;
 
 async function drawLoop() {
-    if (isRendering) {
+    if (isWaitingForRendering) {
+        savedViewerRaymarcherState = raymarcher.getAllShaderState();
+
+        isWaitingForRendering = false;
+        isRendering = true;
+        tiledRenderer = new TiledRenderer();
+        await tiledRenderer.init(raymarcher);
+    
+        let code = renderDataTransformer.getValue();
+    
+        let recordingName = recordingSelector.value;
+        let recording;
+        allRecordings.forEach(rec => {
+            if (recordingName == rec.title) recording = JSON.parse(JSON.stringify(rec));
+        });
+    
+        let transformerFunc = new Function("rec", "renderSettings", code);
+        let renderSettings = {
+            partitions: 4,
+            samples: 1,
+            url: "http://localhost:42064/test/frame%INDEX%.png"
+        };
+    
+        transformerFunc(recording, renderSettings);
+        Raymarcher.removeDuplicateState(recording.data, );
+    
+        await tiledRenderer.startRender(recording.data, renderSettings.partitions, renderSettings.samples, renderSettings.url);
+    } else if (isRendering) {
         await tiledRenderer.nextFrame();
         if (tiledRenderer.done || keys.x) {
             isRendering = false;
             tiledRenderer.endRender();
-            raymarcher.setAllShaderState(savedViewerRaymarcherState);
+            raymarcher.setAllShaderState(savedViewerRaymarcherState, true);
         }
 
 
     } else {
 
-        t++;
-        var acceleration = [0, 0, 0]
-        
-        let xRotation = quatAngleAxis(playerTransform.rotation[0] * -rmSettings.cameraAccel, vectorQuaternionMultiply(playerTransform.quatRotation, [0, 0, 1]));
-        let yRotation = quatAngleAxis(playerTransform.rotation[1] * -rmSettings.cameraAccel, vectorQuaternionMultiply(playerTransform.quatRotation, [1, 0, 0]));
-    
-        playerTransform.rotation = scalarMultiply(playerTransform.rotation, rmSettings.cameraSmoothness);
-    
-        playerTransform.quatRotation = quatMultiply(xRotation, playerTransform.quatRotation);
-        playerTransform.quatRotation = quatMultiply(yRotation, playerTransform.quatRotation);
-        playerTransform.quatRotation = normalize(playerTransform.quatRotation);
-    
-        if (keys.w) {
-            acceleration[1] += 0.01;
-        }
-        if (keys.a) {
-            acceleration[0] += -0.01;
-        }
-        if (keys.s) {
-            acceleration[1] += -0.01;
-        }
-        if (keys.d) {
-            acceleration[0] += 0.01;
-        }
-        if (keys.shift) {
-            acceleration[2] += -0.01;
-        }
-        if (keys[" "]) {
-            acceleration[2] += 0.01;
-        }
-        if (keys.e || t == 1) {
-            lightLocation = playerTransform.position.concat();
-            raymarcher.setShaderState("uLambertLightLocation", lightLocation);
-            console.log(raymarcher.uLambertLightLocation);
-        }
-        if (singleFrameKeys.r) {
-            isRecording = !isRecording;
-            if (!isRecording) {
-                Raymarcher.removeDuplicateState(currentRecording);
-                allRecordings.push({
-                    data: currentRecording,
-                    title: `recording${allRecordings.length}`
-                });
-                addRecording(allRecordings[allRecordings.length - 1], document.getElementById("recordings"));
-                regenerateRecordingSelector(recordingSelector, allRecordings);
-                currentRecording = [];
-            }
-        }
         if (keys.x) {
             isDoingPlayback = false;
         }
@@ -755,12 +845,64 @@ async function drawLoop() {
             raymarcher.renderSingleFrame();
             raymarcher.presentFramebuffer();
         } else {
-            acceleration = acceleration.map(e => { return e * rmSettings.playerSpeed; });
+                
+            raymarcher.setShaderState("uPrevPos", playerTransform.position);
+            raymarcher.setShaderState("uPrevRot", playerTransform.quatRotation);
+            t++;
+            var acceleration = [0, 0, 0]
+            
+            let xRotation = quatAngleAxis(playerTransform.rotation[0] * -rmSettings.values.cameraAccel, vectorQuaternionMultiply(playerTransform.quatRotation, [0, 0, 1]));
+            let yRotation = quatAngleAxis(playerTransform.rotation[1] * -rmSettings.values.cameraAccel, vectorQuaternionMultiply(playerTransform.quatRotation, [1, 0, 0]));
+        
+            playerTransform.rotation = scalarMultiply(playerTransform.rotation, rmSettings.values.cameraSmoothness);
+        
+            playerTransform.quatRotation = quatMultiply(xRotation, playerTransform.quatRotation);
+            playerTransform.quatRotation = quatMultiply(yRotation, playerTransform.quatRotation);
+            playerTransform.quatRotation = normalize(playerTransform.quatRotation);
+        
+            if (keys.w) {
+                acceleration[1] += 0.01;
+            }
+            if (keys.a) {
+                acceleration[0] += -0.01;
+            }
+            if (keys.s) {
+                acceleration[1] += -0.01;
+            }
+            if (keys.d) {
+                acceleration[0] += 0.01;
+            }
+            if (keys.shift) {
+                acceleration[2] += -0.01;
+            }
+            if (keys[" "]) {
+                acceleration[2] += 0.01;
+            }
+            if (keys.e || t == 1) {
+                lightLocation = playerTransform.position.concat();
+                raymarcher.setShaderState("uLambertLightLocation", lightLocation);
+                console.log(raymarcher.uLambertLightLocation);
+            }
+            if (singleFrameKeys.r) {
+                isRecording = !isRecording;
+                if (!isRecording) {
+                    Raymarcher.removeDuplicateState(currentRecording);
+                    allRecordings.push({
+                        data: currentRecording,
+                        title: `recording${allRecordings.length}`
+                    });
+                    addRecording(allRecordings[allRecordings.length - 1], document.getElementById("recordings"));
+                    regenerateRecordingSelector(recordingSelector, allRecordings);
+                    currentRecording = [];
+                }
+            }
+
+            acceleration = acceleration.map(e => { return e * rmSettings.values.playerSpeed; });
     
             acceleration = vectorQuaternionMultiply(playerTransform.quatRotation, acceleration);
             playerTransform.velocity = playerTransform.velocity.map((e, i) => { return e + acceleration[i]; });
             playerTransform.position = playerTransform.position.map((e, i) => { return e + playerTransform.velocity[i]; });
-            playerTransform.velocity = playerTransform.velocity.map(e => { return e * rmSettings.playerSmoothness; });
+            playerTransform.velocity = playerTransform.velocity.map(e => { return e * rmSettings.values.playerSmoothness; });
     
             raymarcher.setShaderState("uPosition", playerTransform.position);
     
@@ -777,18 +919,18 @@ async function drawLoop() {
     
             // raymarcher.uFractalRotation = fractalRotateQuat;
     
-            if (!rmSettings.motionBlur) {
+            if (!rmSettings.values.motionBlur) {
                 raymarcher.setShaderState("uMotionBlurPrevPos", playerTransform.position);
                 raymarcher.setShaderState("uMotionBlurPrevRot", playerTransform.quatRotation);
             }
-            raymarcher.renderSingleFrame();
+            await raymarcher.renderSingleFrame();
             raymarcher.presentFramebuffer();
-            if (rmSettings.motionBlur) {
+            
+            if (rmSettings.values.motionBlur) {
                 raymarcher.setShaderState("uMotionBlurPrevPos", playerTransform.position);
                 raymarcher.setShaderState("uMotionBlurPrevRot", playerTransform.quatRotation);
             }
-            raymarcher.setShaderState("uPrevPos", playerTransform.position);
-            raymarcher.setShaderState("uPrevRot", playerTransform.quatRotation);
+
         }
         if (isRecording) {
             let shaderState = raymarcher.getAllShaderState();

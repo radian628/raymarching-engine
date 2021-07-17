@@ -325,8 +325,18 @@ class Raymarcher {
             uTimeMotionBlurFactor: { uniform: true, uniformType: "1f" },
             uTime: { uniform: true, uniformType: "1f" },
             uNormalDelta: { uniform: true, uniformType: "1f" },
+            uReprojectionExtraSamples: { uniform: true, uniformType: "1i" },
+            uStrobe: { uniform: true, uniformType: "1i" },
+            uReprojectionEdgeThreshold: { uniform: true, uniformType: "1f" },
+            uReprojectionAccumulationLimit: { uniform: true, uniformType: "1f" },
+
+            denoise: { recompileToneBalance: true },
+            uSigma: {},
+            uSigmaCoefficient: {},
+            uSharpeningThreshold: {},
 
             raymarchingSteps: { recompile: true },
+            usePointLightSource: { recompile: true },
             normalRaymarchingSteps: { recompile: true },
             reflections: { recompile: true },
             transmissionRaymarchingSteps: { recompile: true },
@@ -335,13 +345,18 @@ class Raymarcher {
             additiveBlending: { recompile: true },
             reproject: { recompile: true },
             signedDistanceFunction: { recompile: true },
-            resolution: { recompile: true, resize: true }
+            resolution: { recompile: true, resize: true },
+
+            linearFilterPreviousFrame: { resize: true }
         };
         this.defaultShaderStateInfo = JSON.parse(JSON.stringify(this.shaderStateInfo));
     }
 
     resetShaderStateInfo() {
         this.shaderStateInfo = JSON.parse(JSON.stringify(this.defaultShaderStateInfo));
+        Object.keys(this.shaderState).forEach(key => {
+            if (!this.shaderStateInfo[key]) delete this.shaderState[key];
+        });
     }
 
     registerShaderState(k, v) {
@@ -353,9 +368,13 @@ class Raymarcher {
 
         if (!info && !ignoreInvalidState) throw new Error(`Invalid shader state parameter: ${k}`);
         
-        if (!ignoreInvalidState) {
+        if (info) {
             if (info.recompile) {
                 this.recompileNextFrame = true;
+            }
+
+            if (info.recompileToneBalance) {
+                this.recompileToneBalanceNextFrame = true;
             }
 
             if (info.resize) {
@@ -410,21 +429,38 @@ class Raymarcher {
         this.surface.height = this.shaderState.resolution[1];
         gl.viewport(0, 0, ...this.shaderState.resolution);
 
+        let prevFrameFilter = this.shaderState.linearFilterPreviousFrame ? gl.LINEAR : gl.NEAREST;
+
         //======= PREVIOUS FRAME =========
         this.prevFrame = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, this.prevFrame);
 
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, prevFrameFilter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, prevFrameFilter);
 
         gl.texImage2D(
             gl.TEXTURE_2D, 0, gl.RGBA32F, this.surface.width, this.surface.height, 0, gl.RGBA, gl.FLOAT, null
         );
 
+        this.prevFrameSamplesRendered = gl.createTexture();
+
+        gl.bindTexture(gl.TEXTURE_2D, this.prevFrameSamplesRendered);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, prevFrameFilter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, prevFrameFilter);
+
+        gl.texImage2D(
+            gl.TEXTURE_2D, 0, gl.R16F, this.surface.width, this.surface.height, 0, gl.RED, gl.HALF_FLOAT, null
+        );
+
         this.prevFramebuffer = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.prevFramebuffer);
+        gl.bindTexture(gl.TEXTURE_2D, this.prevFrame);
         gl.framebufferTexture2D(
             gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.prevFrame, 0
+        );
+        gl.bindTexture(gl.TEXTURE_2D, this.prevFrameSamplesRendered);
+        gl.framebufferTexture2D(
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0+1, gl.TEXTURE_2D, this.prevFrameSamplesRendered, 0
         );
 
 
@@ -445,25 +481,43 @@ class Raymarcher {
                 gl.TEXTURE_2D, 0, gl.RGBA, 2048, 2048, 0, gl.RGBA, gl.UNSIGNED_BYTE, img
             );
         }
-        img.src = "recordings/image2.png";
+        img.src = "image.png";
         
         
         //======= CURRENT FRAME =========
         this.currentFrame = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, this.currentFrame);
 
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrame);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
         gl.texImage2D(
             gl.TEXTURE_2D, 0, gl.RGBA32F, this.surface.width, this.surface.height, 0, gl.RGBA, gl.FLOAT, null
         );
+        
+        this.currentFrameSamplesRendered = gl.createTexture();
+
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameSamplesRendered);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+        gl.texImage2D(
+            gl.TEXTURE_2D, 0, gl.R16F, this.surface.width, this.surface.height, 0, gl.RED, gl.HALF_FLOAT, null
+        );
 
         this.currentFramebuffer = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.currentFramebuffer);
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrame);
         gl.framebufferTexture2D(
             gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.currentFrame, 0
         );
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameSamplesRendered);
+        gl.framebufferTexture2D(
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + 1, gl.TEXTURE_2D, this.currentFrameSamplesRendered, 0
+        );
+
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     }
 
     async init() {
@@ -488,6 +542,7 @@ class Raymarcher {
     async recompileToneBalanceShader() {
         var vertShader = (await request("./shaders/vertex.vert")).response;
         var fragShader = (await request("./shaders/tone-balance.frag")).response;
+        fragShader = this.defineIfTrue(fragShader, "DENOISE", this.shaderState.denoise);
         this.toneBalanceProg = buildShaderProgram(this.gl, vertShader, fragShader);
     }
 
@@ -509,6 +564,7 @@ class Raymarcher {
         fragShader = replaceMacro(fragShader, "TRANSMISSIONRAYS", this.shaderState.transmissionRayCount);
         fragShader = replaceMacro(fragShader, "SAMPLESPERFRAME", this.shaderState.samplesPerFrame);
         fragShader = this.defineIfTrue(fragShader, "REPROJECT", this.shaderState.reproject);
+        fragShader = this.defineIfTrue(fragShader, "USE_POINT_LIGHT_SOURCE", this.shaderState.usePointLightSource);
         let replaceText = "";
         if (this.shaderState.additiveBlending) replaceText = "#define ADDITIVE\n" + replaceText;
         if (this.shaderState.additiveBlending) {
@@ -524,14 +580,12 @@ class Raymarcher {
 
         fragShader = fragShader.replace(/\/\/SDF_START[\s\S]+?\/\/SDF_END/g, this.shaderState.signedDistanceFunction);
 
-        console.log(fragShader);
         this.prog = buildShaderProgram(this.gl, vertShader, fragShader);
         this.gl.finish();
     }
 
     registerCustomUniforms() {
         let customUniforms = getUIComment(this.shaderState.signedDistanceFunction);
-        console.log(customUniforms)
         if (customUniforms && customUniforms.settings) {
             customUniforms = customUniforms.settings;
             customUniforms.forEach(uniform => {
@@ -540,33 +594,49 @@ class Raymarcher {
         }
     }
 
-    setUniform(name, type, value) {
-        this.gl[`uniform${type}`](this.gl.getUniformLocation(this.prog, name), value);
+    setUniform(prog, name, type, value) {
+        this.gl[`uniform${type}`](this.gl.getUniformLocation(prog, name), value);
+    }
+
+    async updateStateIfNeeded() {
+        if (this.recreateFramebuffers) {
+            await this.createFramebuffers();
+            this.recreateFramebuffers = false;
+        }
+        if (this.recompileNextFrame) {
+            console.log("recompiling shader...")
+            await this.recompileShader();
+            console.log("SHADER WAS RECOMPILED");
+            this.recompileNextFrame = false;
+        }
     }
 
     async renderSingleFrame() {
         let gl = this.gl;
 
-        if (this.recompileNextFrame) {
-            await this.recompileShader();
-            this.recompileNextFrame = false;
-        }
-            
+        await this.updateStateIfNeeded();
+        
         this.t++;
         if (this.t > 10000) this.t = -10000;
 
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
-
         gl.useProgram(this.prog);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
+        this.gl.drawBuffers([this.gl.COLOR_ATTACHMENT0, this.gl.COLOR_ATTACHMENT1]);
+
+        //if (gl.FRAMEBUFFER_COMPLETE == gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER)) console.log("sdfsdfsdf");
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.prevFrame);
         
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, this.img);
+        
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, this.prevFrameSamplesRendered);
 
         gl.uniform1i(gl.getUniformLocation(this.prog, "uPrevFrame"), 0);
         gl.uniform1i(gl.getUniformLocation(this.prog, "img"), 1);
+        gl.uniform1i(gl.getUniformLocation(this.prog, "uPrevFrameSamplesRendered"), 2);
         gl.uniform1f(gl.getUniformLocation(this.prog, "uNoiseSeed"), this.t);
         gl.uniform2fv(gl.getUniformLocation(this.prog, "uViewportSize"), this.shaderState.resolution);
         let aVertexPosition = gl.getAttribLocation(this.prog, "aVertexPosition");
@@ -574,22 +644,28 @@ class Raymarcher {
         Object.keys(this.shaderStateInfo).forEach(key => {
             let ssi = this.shaderStateInfo[key];
             if (ssi.uniform) {
-                this.setUniform(key, ssi.uniformType, this.shaderState[key]);
+                this.setUniform(this.prog, key, ssi.uniformType, this.shaderState[key]);
             }
         }); 
+        //console.log(this.shaderState.uPrevPos, this.shaderState.uPosition);
 
         gl.enableVertexAttribArray(aVertexPosition);
         gl.vertexAttribPointer(aVertexPosition, 2,
             gl.FLOAT, false, 0, 0);
-        
+    
         gl.drawArrays(gl.TRIANGLES, 0, 6);
+
 
 
 
         gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.currentFramebuffer);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.prevFramebuffer);
-        gl.blitFramebuffer(0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
 
+        for (let i = 0; i < 2; i++) {
+            gl.readBuffer(gl.COLOR_ATTACHMENT0 + i);
+            gl.drawBuffers([...new Array(i).fill(gl.NONE), gl.COLOR_ATTACHMENT0 + i]);
+            gl.blitFramebuffer(0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        }
 
         if (this.resetState == 1) {
             await this.recompileShader();
@@ -598,11 +674,12 @@ class Raymarcher {
             await this.recompileShader();
             this.recompileNextFrame = false;
         } 
-        
-        if (this.recreateFramebuffers) {
-            this.createFramebuffers();
-            this.recreateFramebuffers = false;
+
+        if (this.recompileToneBalanceNextFrame) {
+            this.recompileToneBalanceShader();
+            this.recompileToneBalanceNextFrame = false;
         }
+        
         return;
     }
 
@@ -612,10 +689,19 @@ class Raymarcher {
         
         gl.useProgram(this.toneBalanceProg);
 
+        ["uSigma", "uSigmaCoefficient", "uSharpeningThreshold"].forEach(uniformName => {
+            this.setUniform(this.toneBalanceProg, uniformName, "1f", this.shaderState[uniformName]);
+        })
+
+        //gl.drawBuffers([gl.BACK]);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.currentFrame);
+        gl.uniform1i(gl.getUniformLocation(this.toneBalanceProg, "uPrevFrame"), 0);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameSamplesRendered);
+        this.setUniform(this.toneBalanceProg, "sampleCounts", "1i", 1);
         
-        let aVertexPosition = gl.getAttribLocation(this.prog, "aVertexPosition");
+        let aVertexPosition = gl.getAttribLocation(this.toneBalanceProg, "aVertexPosition");
 
         gl.enableVertexAttribArray(aVertexPosition);
         gl.vertexAttribPointer(aVertexPosition, 2,
@@ -623,5 +709,15 @@ class Raymarcher {
         
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
+    }
+
+    async clearFramebuffers() {
+        this.gl.bindFramebuffer(this.gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
+        this.gl.drawBuffers([this.gl.COLOR_ATTACHMENT0, this.gl.COLOR_ATTACHMENT1]);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+        this.gl.bindFramebuffer(this.gl.DRAW_FRAMEBUFFER, this.prevFramebuffer);
+        this.gl.drawBuffers([this.gl.COLOR_ATTACHMENT0, this.gl.COLOR_ATTACHMENT1]);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
     }
 }

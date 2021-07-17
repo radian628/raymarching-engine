@@ -9,6 +9,8 @@
 //#define DIFFUSE
 //#define ADDITIVE
 
+//============================== UNIFORMS =============================
+
 uniform vec3 uPosition;
 uniform float uTime;
 uniform float uNoiseSeed;
@@ -22,6 +24,7 @@ uniform float uAOStrength;
 
 uniform sampler2D uPrevFrame;
 uniform sampler2D img;
+uniform sampler2D uPrevFrameSamplesRendered;
 
 uniform float uBlendFactor;
 
@@ -41,14 +44,21 @@ uniform float uTimeMotionBlurFactor;
 
 uniform float uNormalDelta;
 
+uniform int uReprojectionExtraSamples;
+
+uniform int uStrobe;
+
+uniform float uReprojectionEdgeThreshold;
+uniform float uReprojectionAccumulationLimit;
+
 in highp vec2 vTexCoord; 
 layout(location = 0) out vec4 fragColor;
-
+layout(location = 1) out float sampleCount;
 
 vec3 uLambertLightLocation2;
 
+//============================================= MACROS (PSEUDO-UNIFORMS) ============================
 
-//iteraetion count
 #define ITERATIONS 8.0
 
 #define STEPS 0
@@ -60,6 +70,18 @@ vec3 uLambertLightLocation2;
 #define TRANSMISSIONRAYS 2
 
 #define SAMPLESPERFRAME 1
+
+
+//========================================== RAYMARCHING "LIBRARY" =======================================
+
+struct Material {
+    vec3 color;
+    float roughness;
+    bool metallic;
+    bool background;
+};
+
+//=========================================== HASH, SAMPLING, AND RANDOM =======================================
 
 uint hash( uint x ) {
     x += ( x << 10u );
@@ -84,7 +106,7 @@ float rand( vec2  v ) { return floatConstruct(hash(floatBitsToUint(v))); }
 
 vec2 seed;
 float rand() {
-    seed += vec2(1.0);
+    seed += vec2(0.239482);
     return rand(seed);
 }
 vec2 seed2;
@@ -92,6 +114,22 @@ float rand2() {
     seed2 += vec2(1.0);
     return rand(seed2);
 }
+
+const float tau = 6.28318531;
+vec2 boxMuller(float a, float b) {
+    return vec2(
+        cos(tau * b),
+        sin(tau * b)
+    ) * sqrt(-2.0 * log(a));
+}
+
+vec3 hemisphericalSample(vec3 normal) {
+    vec3 randomSample = vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x);
+    return randomSample * sign(dot(normal, randomSample));
+}
+
+
+//====================================== LENGTH SQUARED TEMPLATE ======================================
 
 #define makeLength2(type) float length2(type v) { return dot(v, v); }
 
@@ -102,15 +140,9 @@ float distance2(vec3 a, vec3 b) {
 
 makeLength2(vec2)
 
-const float tau = 6.28318531;
-vec2 boxMuller(float a, float b) {
-    return vec2(
-        cos(tau * b),
-        sin(tau * b)
-    ) * sqrt(-2.0 * log(a));
-}
 
-//rotate using quaternion
+//===================================== QUATERNIONS ===========================================
+
 vec3 rotateQuat(vec3 position, vec4 q)
 { 
   vec3 v = position.xyz;
@@ -127,48 +159,13 @@ vec4 quatInverse(vec4 q) {
     return conj / dot(q, q);
 }
 
-//REPLACE_START(globalSDF)
-
-//reflect across all three axes
-
 float time;
+
+//======================================= SIGNED DISTANCE FUNCTIONS ==================================
 
 //SDF_START
 float globalSDF(vec3 position, out vec3 color, out float roughness, out bool metallic, out bool background) {
-    metallic = true;
-    //return fractalSDF(/*mod(rayPosition + vec3(1.0f), 2f) - vec3(1.0f)*/position, vec3(2.0, 2.0, 2.0), 2.0, color, roughness);
-
-    //metallic = true;  
-    float time3 = time * 0.01;
-    vec3 offset = vec3(
-        0.0 + floor((position.z) / 2.0) * time3,
-        0.0 + floor((position.z) / 2.0) * time3,
-        0.0
-        
-        );
-    vec3 adjustedPosition = position + offset; 
-    vec3 d = abs(mod(adjustedPosition, 2.0) - vec3(1.0)) - vec3(0.5);
-    d *= vec3(0.5, 0.5, 1.0);
-    adjustedPosition += vec3(1.0);
-        seed2 = floor((adjustedPosition.xy + 1.0) / 2.0) + floor((adjustedPosition.zx + 1.0) / 2.0);
-    vec3 positionNoise = vec3(
-        rand2() - 0.0,
-        rand2() - 0.0,
-        rand2() - 0.0
-    ) * 1.0;
-    //d = rotateQuat(d, vec4(0.9689124217106447, 0.12370197962726147, 0.12370197962726147, 0.12370197962726147));
-    // if (d.z > max(d.x, d.y)) {
-    //     color = texture(img, d.xy * 2.0).rgb;
-    // }
-    // if (d.y > max(d.x, d.z)) {
-    //     color = texture(img, d.xz * 2.0).rgb;
-    // }
-    // if (d.x > max(d.z, d.y)) {
-    //     color = texture(img, d.yz * 2.0).rgb;
-    // }
-    color = positionNoise;
-    roughness = 0.0;
-    //return length(d) - 0.5;
+    vec3 d = abs(mod(position, 2.0) - vec3(1.0)) - vec3(0.5);
     return min(max(d.x,max(d.y,d.z)),0.0) +
          length(max(d,0.0));
 }
@@ -186,15 +183,19 @@ float globalSDF(vec3 position) {
     return globalSDF(position, dummyColor);
 }
 
+//============================================ RAY MARCHING =======================================
+
 //march a single ray
 vec3 marchCameraRay(vec3 origin, vec3 direction, out float finalMinDist, out int stepsBeforeThreshold, out vec3 color, out float roughness, out bool metallic, out bool background) {
 	vec3 directionNormalized = normalize(direction);
 	vec3 position = origin;
 	float minDist = 0.0;
+    float totalDist = 0.0;
 	for (int i = 0; i < STEPS; i++) {
 		minDist = globalSDF(position);
+        totalDist += minDist;
 		position += directionNormalized * minDist;
-		if (minDist < uRayHitThreshold) {
+		if (minDist < uRayHitThreshold * totalDist) {
 			stepsBeforeThreshold = i;
             break;
 		}
@@ -223,9 +224,6 @@ vec3 marchTransmissionRay(vec3 origin, vec3 direction) {
 	for (int i = 0; i < TRANSMISSIONSTEPS; i++) {
 		minDist = globalSDF(position);
 		position += directionNormalized * minDist;
-		// if (minDist < uHitThreshold) {
-        //     break;
-		// }
 	}
 	return position;
 }
@@ -249,7 +247,7 @@ vec3 marchShadowRay(vec3 origin, vec3 direction, out float finalMinDist, out int
 
 vec3 marchRayTrio(vec3 coords, vec3 direction, out float finalMinDist, out int stepsBeforeThreshold, out vec3 normal, out vec3 color, out float roughness, out bool metallic, out bool background) {
 	vec3 dist = marchCameraRay(coords, direction, finalMinDist, stepsBeforeThreshold, color, roughness, metallic, background);
-    vec3 dirNormal1 = normalize(cross(direction, vec3(1.0, 1.0, 1.0)));
+    vec3 dirNormal1 = normalize(cross(direction, vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x)));
     vec3 dirNormal2 = normalize(cross(direction, dirNormal1));
     vec3 nDistX = marchNormalFindingRay(dist + dirNormal1 * uNormalDelta, direction);
     vec3 nDistY = marchNormalFindingRay(dist + dirNormal2 * uNormalDelta, direction);
@@ -257,9 +255,7 @@ vec3 marchRayTrio(vec3 coords, vec3 direction, out float finalMinDist, out int s
     return dist;
 }
 
-//light sources (currently unused)
-vec3 lightSource = vec3(-1.0, -1.4, 0.0) * 2.5;
-vec3 lightSource2 = vec3(1.0, 0.6, 0.5) * 2.5;
+//========================================== LIGHTS AND COLOR =====================================
 
 //lambertian diffuse shading
 vec3 lambertShading(vec3 color, vec3 normal, vec3 light) {
@@ -268,18 +264,14 @@ vec3 lambertShading(vec3 color, vec3 normal, vec3 light) {
 	return color * lightIntensity * uLightStrength;
 }
 
-
-
-vec3 hemisphericalSample(vec3 normal) {
-    vec3 randomSample = vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x);
-    return randomSample * sign(dot(normal, randomSample));
+bool didRayReachLight(vec3 position, vec3 shadowPosition) {
+    return sign(shadowPosition.x - uLambertLightLocation2.x) != sign(position.x - uLambertLightLocation2.x);
 }
 
-
-vec3 getColor(vec3 position, vec3 normal, int steps, vec3 shadowPosition, vec3 baseColor) {
+vec3 getColor(vec3 position, vec3 normal, int steps, vec3 baseColor, bool reachedLight) {
     float colorFactor;
     
-	if (sign(shadowPosition.x - uLambertLightLocation2.x) != sign(position.x - uLambertLightLocation2.x)) {
+	if (reachedLight) {
         colorFactor = mix(uShadowBrightness, 1.0, lambertShading(vec3(1.0), normal, uLambertLightLocation2 - position).x);//;
 	} else {
         colorFactor = uShadowBrightness;
@@ -288,136 +280,222 @@ vec3 getColor(vec3 position, vec3 normal, int steps, vec3 shadowPosition, vec3 b
     return baseColor * (1.0 - float(steps) / float(STEPS) * uAOStrength) * colorFactor;
 }
 
+//========================================== INDIVIDUAL SAMPLE CALCULATION ===========================
+
 float biasToCenter(float x) {
     return 4.0 * pow(x - 0.5, 2.0) * sign(x - 0.5);
 }
 
-vec3 rgbAsymptote(vec3 rgb) {
-    return rgb;//1.0 - 0.5 / (rgb + 0.5);
+void doSample(out vec3 outColor, out vec3 primaryRayHit, int reflections) {
+
+    vec3 albedo = vec3(1.0);
+
+    time = uTime + biasToCenter(rand()) * uTimeMotionBlurFactor;
+
+    vec3 coords = gl_FragCoord.xyz / (uViewportSize.y) - vec3(uViewportSize.x / uViewportSize.y * 0.5, 0.5, 0.0);
+    vec2 texCoords = coords.xy;
+    coords.x *= 1.5 * uFOV;
+    coords.y *= 1.5 * uFOV;
+    
+#ifdef REPROJECT
+    vec2 cameraNoiseVecs = vec2(0.0);
+#else
+    vec2 cameraNoiseVecs = (vec2(
+        rand(),
+        rand()
+    ) - vec2(0.5)) / uViewportSize * 1.5 * uFOV;
+#endif
+
+    vec3 noiseVec3 = vec3(
+        rand(),
+        rand(),
+        rand()
+    ) - vec3(0.5);
+
+    vec3 cameraPosVecs = noiseVec3 * uDOFStrength;
+
+    uLambertLightLocation2 = uLambertLightLocation + noiseVec3 * uShadowSoftness;
+
+    vec3 rayStartPos = mix(uPosition, uMotionBlurPrevPos, noiseVec3.x) + cameraPosVecs;
+    vec3 cameraRayGoal = rotateQuat(vec3(coords.x + cameraNoiseVecs.x, 1.0, coords.y + cameraNoiseVecs.y), mix(rotation, uMotionBlurPrevRot, noiseVec3.y)) * uFocalPlaneDistance;
+
+    vec3 cameraRay = normalize(cameraRayGoal - cameraPosVecs);
+
+    for (int i = 0; i < reflections; i++) {
+
+        float distToSurface = 0.0;
+        int steps1 = STEPS;
+        vec3 normal;
+        vec3 color;
+        float roughness;
+        bool metallic;
+        bool background;
+        vec3 rayHit = marchRayTrio(rayStartPos, cameraRay, distToSurface, steps1, normal, color, roughness, metallic, background);
+        
+        float shadowDistToSurface = 0.0;
+        int shadowSteps = 0;
+        
+#ifdef USE_POINT_LIGHT_SOURCE
+        vec3 shadowRayHit1 = marchShadowRay(rayHit + (uLambertLightLocation2 - rayHit) * uRayHitThreshold * 10.0, (uLambertLightLocation2 - rayHit), shadowDistToSurface, shadowSteps);
+#endif
+
+        if (background) {
+            outColor += color * albedo;
+        } else {
+#ifdef USE_POINT_LIGHT_SOURCE
+            bool reachedLight = didRayReachLight(rayHit, shadowRayHit1);
+#else
+            bool reachedLight = false;
+#endif
+            outColor += getColor(rayHit, normal, steps1, color, reachedLight) * albedo;
+            albedo *= color;
+        }
+
+        vec3 reflectVec = reflect(cameraRay, normal);
+
+
+        for (int j = 0; j < TRANSMISSIONRAYS; j++) {
+            float randSample = rand();
+            vec3 transmissionSample = mix(rayHit, rayStartPos, randSample);
+            vec3 dirToLight = uLambertLightLocation2 - transmissionSample;
+            vec3 transmissionRayHit = marchTransmissionRay(transmissionSample, dirToLight);
+            if (sign(transmissionRayHit.x - uLambertLightLocation2.x) != sign(transmissionSample.x - transmissionRayHit.x)) outColor += vec3(0.05, 0.03, 0.01) / float(TRANSMISSIONRAYS);
+        }
+
+
+        float floati = float(i + 1);
+
+        vec3 noise = (vec3(
+            rand(),
+            rand(),
+            rand()
+        ) - vec3(0.5)) * roughness;
+
+        rayStartPos = rayHit + reflectVec * uRayHitThreshold * 15.0;
+        if (metallic) {
+            cameraRay = reflectVec + noise;
+        } else {
+            cameraRay = hemisphericalSample(normal);
+        }
+
+        if (i == 0) primaryRayHit = rayHit;
+        if (background) break;
+    }
 }
 
-//marches the rays, calculates normals, determines and returns color, etc.
+//============================================== MAIN FUNCTION =====================================
+
 void main() {
+
     vec3 outColor = vec3(0.0);
     seed = vTexCoord + vec2(uNoiseSeed);
 
     vec3 primaryRayHit;
 
-    for (int samples = 0; samples < int(SAMPLESPERFRAME); samples++) {
-        time = uTime + biasToCenter(rand()) * uTimeMotionBlurFactor;
+    bool shouldSample = int(rand(floor(gl_FragCoord.xy / 16.0 + uTime * 24.0)) * float(uStrobe)) == 0;
 
-        vec3 coords = gl_FragCoord.xyz / (uViewportSize.y) - vec3(uViewportSize.x / uViewportSize.y * 0.5, 0.5, 0.0);
-        vec2 texCoords = coords.xy;
-        coords.x *= 1.5 * uFOV;
-        coords.y *= 1.5 * uFOV;
-        
-
-        vec2 cameraNoiseVecs = (vec2(
-            rand(),//rand(vec2(uTime * 77.0, -123.3 * uTime) * coords.xy),
-            rand()//rand(vec2(uTime * -177.0, 346.0 * uTime) * coords.xy)
-        ) - vec2(0.5)) / uViewportSize * 1.5 * uFOV;
-
-        vec3 noiseVec3 = vec3(
-            rand(),//rand(vec2(uTime * 77.0, -123.3 * uTime) * coords.xy),
-            rand(),//rand(vec2(uTime * -177.0, 346.0 * uTime) * coords.xy),
-            rand()//rand(vec2(uTime * 1277.0, 371.2 * uTime) * coords.xy)
-        ) - vec3(0.5);
-
-        vec3 cameraPosVecs = noiseVec3 * uDOFStrength;
-
-        uLambertLightLocation2 = uLambertLightLocation + noiseVec3 * uShadowSoftness;
-
-        vec3 rayStartPos = mix(uPosition, uMotionBlurPrevPos, noiseVec3.x) + cameraPosVecs;
-        vec3 cameraRayGoal = rotateQuat(vec3(coords.x + cameraNoiseVecs.x, 1.0, coords.y + cameraNoiseVecs.y), mix(rotation, uMotionBlurPrevRot, noiseVec3.y)) * uFocalPlaneDistance;
-
-        vec3 cameraRay = normalize(cameraRayGoal - cameraPosVecs);
-
-        for (int i = 0; i < REFLECTIONS; i++) {
-
-            float distToSurface = 0.0;
-            int steps1 = STEPS;
-            vec3 normal;
-            vec3 color;
-            float roughness;
-            bool metallic;
-            bool background;
-            vec3 rayHit = marchRayTrio(rayStartPos, cameraRay, distToSurface, steps1, normal, color, roughness, metallic, background);
-            
-            float shadowDistToSurface = 0.0;
-            int shadowSteps = 0;
-            vec3 shadowRayHit1 = marchShadowRay(rayHit + (uLambertLightLocation2 - rayHit) * uRayHitThreshold * 10.0, (uLambertLightLocation2 - rayHit), shadowDistToSurface, shadowSteps);
-
-            if (background) {
-                outColor = color;
-                break;
-            } else {
-                outColor += getColor(rayHit, normal, steps1, shadowRayHit1, color);
-            }
-
-            vec3 reflectVec = reflect(cameraRay, normal);
-
-
-            for (int j = 0; j < TRANSMISSIONRAYS; j++) {
-                float randSample = rand();
-                vec3 transmissionSample = mix(rayHit, rayStartPos, randSample);
-                vec3 dirToLight = uLambertLightLocation2 - transmissionSample;
-                vec3 transmissionRayHit = marchTransmissionRay(transmissionSample, dirToLight);
-                if (sign(transmissionRayHit.x - uLambertLightLocation2.x) != sign(transmissionSample.x - transmissionRayHit.x)) outColor += vec3(0.05, 0.03, 0.01) / float(TRANSMISSIONRAYS);
-            }
-
-
-            float floati = float(i + 1);
-
-            vec3 noise = (vec3(
-                rand(),//rand(coords.xy + vec2(uTime, uTime) + floati),
-                rand(),//rand(coords.xy + vec2(uTime + 234.0, -uTime) + floati),
-                rand()//rand(coords.xy + vec2(-uTime - 76.0, 55.0 + uTime) + floati)
-            ) - vec3(0.5)) * roughness;
-
-            rayStartPos = rayHit + reflectVec * uRayHitThreshold * 15.0;
-            if (metallic) {
-                cameraRay = reflectVec + noise;
-            } else {
-                cameraRay = hemisphericalSample(normal);
-            }
-
-            if (i == 0) primaryRayHit = rayHit;
+    if (shouldSample) {
+        for (int samples = 0; samples < int(SAMPLESPERFRAME); samples++) {
+            doSample(outColor, primaryRayHit, REFLECTIONS);
         }
+    } else {
+        doSample(outColor, primaryRayHit, 1);
     }
-    outColor /= float(REFLECTIONS * SAMPLESPERFRAME);
-    outColor *= 2.0;
-    outColor = abs(rgbAsymptote(outColor));
 
     vec4 lastFrameSample; 
 
-    #ifdef REPROJECT
+    bool shouldResample = false;
+#ifdef REPROJECT
     vec3 pixelAtLastFrame = rotateQuat((primaryRayHit - uPrevPos), quatInverse(uPrevRot));
-    vec2 reprojectedTexCoords = ((pixelAtLastFrame.xz / pixelAtLastFrame.y) / (uFOV * 1.5) * vec2(uViewportSize.y / uViewportSize.x, 1.0)) + vec2(0.5);
+    vec2 reprojectedTexCoordsCenter = ((pixelAtLastFrame.xz / pixelAtLastFrame.y) / (uFOV * 1.5) * vec2(uViewportSize.y / uViewportSize.x, 1.0)) + vec2(0.5);
+
+    reprojectedTexCoordsCenter += (vec2(rand(), rand()) - 0.5) / uViewportSize * 0.5;
+
+    //vec2 fractReprojectedTexCoords = fract(reprojectedTexCoordsCenter * uViewportSize) / uViewportSize;
+
+    //reprojectedTexCoords += (vec2(pow(fractReprojectedTexCoords.x - 0.5, 2.0), pow(fractReprojectedTexCoords.y - 0.5, 2.0)) * sign(fractReprojectedTexCoords - 0.5) - fractReprojectedTexCoords) / uViewportSize;
+
+    vec2 texOffset;
+
+    float minDistanceError = 9999999.9;
+
+    vec2 reprojectedTexCoords = reprojectedTexCoordsCenter;
+
+    lastFrameSample = texture(uPrevFrame, reprojectedTexCoordsCenter);
+    
+    if (abs(lastFrameSample.a - length(pixelAtLastFrame)) / length(pixelAtLastFrame) > uReprojectionEdgeThreshold) {
+        for (texOffset.y = -1.0; texOffset.y < 1.5; texOffset.y++) {
+            for (texOffset.x = -1.0; texOffset.x < 1.5; texOffset.x++) {
+                vec2 actualReprojectedTexCoords = reprojectedTexCoordsCenter + texOffset / uViewportSize;
+                vec4 potentialLastFrameSample = texture(uPrevFrame, actualReprojectedTexCoords);
+                float distanceError = abs(potentialLastFrameSample.a - length(pixelAtLastFrame)) / length(pixelAtLastFrame);
+                if (minDistanceError > distanceError) {
+                    minDistanceError = distanceError;
+                    lastFrameSample = potentialLastFrameSample;
+                    reprojectedTexCoords = actualReprojectedTexCoords;
+                }
+            }   
+        } 
+    }
+
+    float prevSampleCount = texture(uPrevFrameSamplesRendered, reprojectedTexCoords).r;
 
     //gl_FragCoord.xyz / (uViewportSize.y) - vec3(uViewportSize.x / uViewportSize.y * 0.5, 0.5, 0.0);
-    if (clamp(reprojectedTexCoords, 0.0, 1.0) == reprojectedTexCoords) {
-        lastFrameSample = texture(uPrevFrame, reprojectedTexCoords);
-        if (abs(lastFrameSample.a - length(pixelAtLastFrame)) / lastFrameSample.a > 0.05) {
-            lastFrameSample = vec4(0.0);
+    if (clamp(reprojectedTexCoords, 0.001, 0.999) == reprojectedTexCoords) {
+        //lastFrameSample = texture(uPrevFrame, reprojectedTexCoords);
+        if (abs(lastFrameSample.a - length(pixelAtLastFrame)) / length(pixelAtLastFrame) > uReprojectionEdgeThreshold) {
+            lastFrameSample = vec4(outColor, 1.0);
+            shouldResample = true;
+            sampleCount = 0.0;
         }
     } else {
         lastFrameSample = vec4(outColor, 1.0);
+        shouldResample = true;
+        sampleCount = 0.0;
     }
-    #else
+    if (!shouldResample) {
+        sampleCount = prevSampleCount + 1.0;
+    } else {
+        sampleCount = 1.0;
+    }
+#else
     lastFrameSample = texture(uPrevFrame, vTexCoord);
-    #endif
+    sampleCount = 1.0;
+#endif
 
-    #ifdef ADDITIVE
-    fragColor = vec4(outColor, 1.0) * uBlendFactor + lastFrameSample.rgb, 1.0);//vec4(outColor * (1.0 - float(steps1) / float(STEPS)) * colorFactor, 1.0);
-    #else
-    fragColor = mix(vec4(outColor, 1.0), vec4(lastFrameSample.rgb, 1.0), uBlendFactor);
-    #endif
+    float colorDivideFactor = float(REFLECTIONS * SAMPLESPERFRAME);
+
+#ifdef REPROJECT
+    if (prevSampleCount < 8.0) {
+        for (int i = 0; i < uReprojectionExtraSamples; i++) {
+            doSample(outColor, primaryRayHit, REFLECTIONS);
+        }
+        colorDivideFactor += float(REFLECTIONS * uReprojectionExtraSamples);
+    }
+#endif
+    outColor /= colorDivideFactor;
+
+    if (shouldSample) {
+#ifdef REPROJECT
+        float lengthFactor = (lastFrameSample.a - distance(uPosition, primaryRayHit)) / lastFrameSample.a;
+        fragColor = mix(vec4(lastFrameSample.rgb, 1.0), vec4(outColor, 1.0), clamp(max(1.0 / (sampleCount - 1.0), 1.0 / uReprojectionAccumulationLimit) + lengthFactor, 0.0, 1.0));
+#else
+#ifdef ADDITIVE
+        fragColor = vec4(outColor, 1.0) * uBlendFactor + vec4(lastFrameSample.rgb, 1.0);//vec4(outColor * (1.0 - float(steps1) / float(STEPS)) * colorFactor, 1.0);
+#else
+        fragColor = mix(vec4(outColor, 1.0), vec4(lastFrameSample.rgb, 1.0), uBlendFactor);
+#endif
+#endif
+
+    } else {
+        fragColor = vec4(lastFrameSample.rgb, 1.0);
+    }
 
     fragColor.a = distance(uPosition, primaryRayHit);
+    fragColor.rgb = max(fragColor.rgb, 0.0);
 
-    #ifdef RESET
+#ifdef RESET
     fragColor = vec4(0.0, 0.0, 0.0, 1.0);
-    #endif
+#endif
 
-    //gl_FragColor = vec4(uIterationRotationQuaternion.rgb, 1.0);
 }
