@@ -8,8 +8,19 @@
         <canvas width="1920" height="1080" id="canvas"></canvas>
 
         <div id="ui-tabs">
-            <div id="tab-switcher">
-
+            <div id="tutorial">
+                <h2>Tutorial</h2>
+                <h3>What is this?</h3>
+                <p>This is a 3D rendering engine. Basically, it just draws stuff in 3D space like any 3D video game does (though the mechanism by which it does this differs substantially). You can move around in 3D space with the W, A, S, D, Space, and Shift (you'll recognize this if you've ever played Minecraft) keys to view the world from different angles. Press E to move the light source to your current location (might not be obvious with default settings). To be able to control your orientation, click the portion of the screen without the UI. To regain control of your cursor, press escape.</p>
+                <h3>Tabs</h3>
+                <h4>Settings</h4>
+                <p>The settings tab is where you'll find all the parameters you can adjust to alter the behavior of the raymarching engine. Hover over a parameter to view a detailed explanation of it below. Be aware that some parameters will require that the shader (the program that draws the pixels on the screen) be reloaded. This can cause a lag spike lasting several seconds.</p>
+                <p>You can also find setting presets at the top of the settings tab. This lets you change several settings to predetermined values I've chosen, though you'll have to click "Apply Setting Preset" to confirm your choice. Currently, there are two options: default.json, which are the default settings the viewer has on startup; and realtime-global-illumination.json, which are much more computationally intensive settings, designed to simulate realistic light bounces.</p>
+                <h4>Signed Distance Function Shader</h4>
+                <p>This tab contains two major elements: A GLSL shader and a dropdown containing several preset shaders. Most people will likely only care about the preset shader (the second one). This lets you select the thing that is actually being drawn. By default, it's just a 3D grid of cubes (which I chose for its relatively low computational cost). However, you can change this to all sorts of other things, like fractals. However, do be aware that changing the shader will cause a lag spike.</p>
+                <p>You can also write shaders for yourself to draw your own things to the screen! Unfortunately, I don't really have any builtin means of debugging the shaders beyond spitting the shader info log into the developer console. The line numbers will be wrong because I literally just paste the shader into an existing, larger shader.</p>
+                <h3>PAGE CURRENTLY UNDER CONSTRUCTION</h3>
+                <p>Just wanted to get the important stuff out of the way. Rest of this page (and in fact a lot of this project) is still under construction!</p>
             </div>
             <div id="ui-container">
                 <h2>Presets</h2>
@@ -68,6 +79,9 @@
                     <li><a href="https://codemirror.net/doc/manual.html">CodeMirror - Marijn Haverbeke</a></li>
                 </ul>
             </div>
+        </div>
+        <div id="tab-switcher">
+
         </div>
         <div id="statistics">
 

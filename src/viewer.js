@@ -395,6 +395,9 @@ let raymarcherSettings = {
 }
 
 let uiTabs = {
+    "tutorial": {
+        title: "Tutorial"
+    },
     "ui-container": {
         title: "Settings"
     },

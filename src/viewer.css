@@ -36,8 +36,9 @@ canvas {
 #tab-switcher {
     top: 0px;
     left: 0px;
+    width: 100vw;
     position: absolute;
-    z-index: 2;
+    z-index: 3;
 }
 
 #statistics {

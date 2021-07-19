@@ -83,10 +83,10 @@ float fractalSDF(vec3 rayPosition, vec3 spherePosition, float sphereRadius, out 
         minDist3 = min(minDist3, distance2(rayPos2, vec3(1.0, -1.0, -1.0)));
 	}
 	float result = cubeSDF(rayPos2, spherePosition, sphereRadius, color) * pow(0.5, uFractalIterations);
-    color = clamp(vec3(minDist, minDist2, minDist3), 0.0, 1.0);
+    color = clamp(vec3(minDist, minDist2, minDist3) * 0.25, 0.0, 1.0);
     if (length(rayPosition) > 100.0) {
         background = true;
-        color = vec3(0.3, 0.3, 0.3);
+        color = vec3(0.3, 0.4, 0.5) * (dot(normalize(uLambertLightLocation), normalize(rayPosition)) * 0.5 + 0.5) * 3.0;
     }
     roughness = 1.0 - color.x;
     return result;
