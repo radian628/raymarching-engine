@@ -25,6 +25,7 @@ uniform float uAOStrength;
 uniform sampler2D uPrevFrame;
 uniform sampler2D img;
 uniform sampler2D uPrevFrameSamplesRendered;
+uniform sampler2D uPrevFrameSubpixelOffsetsUnsigned;
 
 uniform float uBlendFactor;
 
@@ -54,6 +55,9 @@ uniform float uReprojectionAccumulationLimit;
 in highp vec2 vTexCoord; 
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out float sampleCount;
+layout(location = 2) out vec3 outNormal;
+layout(location = 3) out vec3 outAlbedo;
+layout(location = 4) out vec2 outSubpixelOffset;
 
 vec3 uLambertLightLocation2;
 
@@ -286,7 +290,7 @@ float biasToCenter(float x) {
     return 4.0 * pow(x - 0.5, 2.0) * sign(x - 0.5);
 }
 
-void doSample(out vec3 outColor, out vec3 primaryRayHit, int reflections) {
+void doSample(out vec3 outColor, out vec3 primaryRayHit, int reflections, out vec3 normalOutput, out vec3 albedoOutput) {
 
     vec3 albedo = vec3(1.0);
 
@@ -350,6 +354,10 @@ void doSample(out vec3 outColor, out vec3 primaryRayHit, int reflections) {
             outColor += getColor(rayHit, normal, steps1, color, reachedLight) * albedo;
             albedo *= color;
         }
+        if (i == 0) {
+            normalOutput = normal * 0.5 + 0.5;
+            albedoOutput = color;
+        }
 
         vec3 reflectVec = reflect(cameraRay, normal);
 
@@ -396,10 +404,11 @@ void main() {
 
     if (shouldSample) {
         for (int samples = 0; samples < int(SAMPLESPERFRAME); samples++) {
-            doSample(outColor, primaryRayHit, REFLECTIONS);
+            doSample(outColor, primaryRayHit, REFLECTIONS, outNormal, outAlbedo);
         }
     } else {
-        doSample(outColor, primaryRayHit, 1);
+        vec3 dummy;
+        doSample(outColor, primaryRayHit, 1, dummy, dummy);
     }
 
     vec4 lastFrameSample; 
@@ -409,8 +418,14 @@ void main() {
     vec3 pixelAtLastFrame = rotateQuat((primaryRayHit - uPrevPos), quatInverse(uPrevRot));
     vec2 reprojectedTexCoordsCenter = ((pixelAtLastFrame.xz / pixelAtLastFrame.y) / (uFOV * 1.5) * vec2(uViewportSize.y / uViewportSize.x, 1.0)) + vec2(0.5);
 
-    reprojectedTexCoordsCenter += (vec2(rand(), rand()) - 0.5) / uViewportSize * 0.5;
 
+    reprojectedTexCoordsCenter += (vec2(rand(), rand()) - 0.5) / uViewportSize * 0.0;
+    vec2 prevFrameSubpixelOffsets = (texture(uPrevFrameSubpixelOffsetsUnsigned, reprojectedTexCoordsCenter).xy);
+    //reprojectedTexCoordsCenter = (floor(reprojectedTexCoordsCenter * uViewportSize) + 0.5) / uViewportSize;
+    //vec2 originalReprojectedTexCoords = reprojectedTexCoordsCenter;
+    reprojectedTexCoordsCenter += prevFrameSubpixelOffsets;
+    //reprojectedTexCoordsCenter = vTexCoord + (floor((reprojectedTexCoordsCenter - vTexCoord) * uViewportSize + 0.5)) / uViewportSize + prevFrameSubpixelOffsets;
+    
     //vec2 fractReprojectedTexCoords = fract(reprojectedTexCoordsCenter * uViewportSize) / uViewportSize;
 
     //reprojectedTexCoords += (vec2(pow(fractReprojectedTexCoords.x - 0.5, 2.0), pow(fractReprojectedTexCoords.y - 0.5, 2.0)) * sign(fractReprojectedTexCoords - 0.5) - fractReprojectedTexCoords) / uViewportSize;
@@ -438,6 +453,8 @@ void main() {
         } 
     }
 
+    outSubpixelOffset = (mod((reprojectedTexCoords - vTexCoord) * uViewportSize + 0.5, 1.0) - 0.5) / uViewportSize;// + prevFrameSubpixelOffsets * uViewportSize;
+
     float prevSampleCount = texture(uPrevFrameSamplesRendered, reprojectedTexCoords).r;
 
     //gl_FragCoord.xyz / (uViewportSize.y) - vec3(uViewportSize.x / uViewportSize.y * 0.5, 0.5, 0.0);
@@ -461,6 +478,7 @@ void main() {
 #else
     lastFrameSample = texture(uPrevFrame, vTexCoord);
     sampleCount = 1.0;
+    outSubpixelOffset = vec2(0.0);
 #endif
 
     float colorDivideFactor = float(REFLECTIONS * SAMPLESPERFRAME);
@@ -468,7 +486,8 @@ void main() {
 #ifdef REPROJECT
     if (prevSampleCount < 8.0) {
         for (int i = 0; i < uReprojectionExtraSamples; i++) {
-            doSample(outColor, primaryRayHit, REFLECTIONS);
+            vec3 dummy;
+            doSample(outColor, primaryRayHit, REFLECTIONS, dummy, dummy);
         }
         colorDivideFactor += float(REFLECTIONS * uReprojectionExtraSamples);
     }

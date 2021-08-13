@@ -9,6 +9,8 @@ layout(location = 0) out vec4 fragColor;
 
 uniform sampler2D src;
 uniform sampler2D sampleCounts;
+uniform sampler2D normal;
+uniform sampler2D albedo;
 
 uniform float uSigma;
 uniform float uSigmaCoefficient;
@@ -44,7 +46,7 @@ uniform float uSharpeningThreshold;
 
 float denoiseStep = 1.0;
 
-vec4 smartDeNoise(sampler2D tex, vec2 uv, float sigma, float kSigma, float threshold)
+vec4 smartDeNoise(sampler2D tex, sampler2D normalTex, sampler2D albedoTex, vec2 uv, float sigma, float kSigma, float threshold)
 {
     float radius = round(kSigma*sigma);
     float radQ = radius * radius;
@@ -56,7 +58,9 @@ vec4 smartDeNoise(sampler2D tex, vec2 uv, float sigma, float kSigma, float thres
     float invThresholdSqrt2PI = INV_SQRT_OF_2PI / threshold;   // 1.0 / (sqrt(2*PI) * sigma^2)
 
     vec4 centrPx = texture(tex,uv);
-    centrPx.rgb = min(centrPx.rgb, 1.0);
+    vec4 centrPxNormal = texture(normalTex,uv);
+    vec4 centrPxAlbedo = texture(albedoTex,uv);
+    //centrPx.rgb = min(centrPx.rgb, 1.0);
 
     float zBuff = 0.0;
     vec4 aBuff = vec4(0.0);
@@ -69,8 +73,10 @@ vec4 smartDeNoise(sampler2D tex, vec2 uv, float sigma, float kSigma, float thres
             float blurFactor = exp( -dot(d , d) * invSigmaQx2 ) * invSigmaQx2PI;
 
             vec4 walkPx =  texture(tex,uv+d/size);
-            walkPx.rgb = min(walkPx.rgb, 50.0);
-            vec4 dC = walkPx-centrPx;
+            vec4 walkPxNormal =  texture(normalTex,uv+d/size);
+            vec4 walkPxAlbedo =  texture(albedoTex,uv+d/size);
+            //walkPx.rgb = min(walkPx.rgb, 50.0);
+            vec4 dC = walkPx-centrPx + walkPxNormal - centrPxNormal + walkPxAlbedo - centrPxAlbedo;
             float deltaFactor = exp( -dot(dC, dC) * invThresholdSqx2) * invThresholdSqrt2PI * blurFactor;
 
             zBuff += deltaFactor;
@@ -88,7 +94,7 @@ vec3 colorCurve(vec3 col) {
 void main() {
     float sampleFactor = float(texture(sampleCounts, vTexCoord).r) + 1.0;
     #ifdef DENOISE
-    vec3 rgb = smartDeNoise(src, vTexCoord, uSigma / min(sqrt(sampleFactor), 10.0), uSigmaCoefficient, uSharpeningThreshold).rgb;
+    vec3 rgb = smartDeNoise(src, normal, albedo, vTexCoord, uSigma / min(sqrt(sampleFactor), 1.0), uSigmaCoefficient, uSharpeningThreshold).rgb;
     #else
     vec3 rgb = texture(src, vTexCoord).rgb;
     //rgb.r = float(texture(sampleCounts, vTexCoord).r) / 256.0;
@@ -97,4 +103,5 @@ void main() {
     //float sampleFactor = 1.0;
 
     fragColor = vec4(colorCurve(rgb), 1.0);
+    //fragColor = vec4(texture(albedo, vTexCoord).rgb, 1.0);
 }

@@ -21,7 +21,7 @@ renderSettings.url = `http://localhost:${PORT}/frame%INDEX%.png`;
 
 //sets the number of samples per pixel per frame
 //higher values will reduce noise
-renderSettings.samples = 32;
+renderSettings.samples = 128;
 
 //sets the number of screen partitions on both axes 
 //(useful if rendering the entire screen is computationally expensive)
@@ -36,8 +36,13 @@ rec.data.forEach((frame, frameIndex) => {
     frame.uAOStrength = 0.0;
   
     frame.additiveBlending = true;
-    frame.uBlendFactor = 0.03;
+    frame.uBlendFactor = 0.01;
 
     frame.raymarchingSteps = 128;
     frame.resolution = [1920, 1080];
+  
+    if (frameIndex != 0) {
+        frame.uMotionBlurPrevPos = rec.data[frameIndex - 1].uPosition;
+        frame.uMotionBlurPrevRot = rec.data[frameIndex - 1].rotation;
+    }
 });

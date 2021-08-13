@@ -423,6 +423,15 @@ class Raymarcher {
         return composition;
     }
 
+    setTexFilters(tex, filter) {
+        
+        let gl = this.gl;
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    }
+
     createFramebuffers() {
         let gl = this.gl;
         this.surface.width = this.shaderState.resolution[0];
@@ -433,23 +442,22 @@ class Raymarcher {
 
         //======= PREVIOUS FRAME =========
         this.prevFrame = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, this.prevFrame);
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, prevFrameFilter);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, prevFrameFilter);
+        this.setTexFilters(this.prevFrame, prevFrameFilter);
 
         gl.texImage2D(
             gl.TEXTURE_2D, 0, gl.RGBA32F, this.surface.width, this.surface.height, 0, gl.RGBA, gl.FLOAT, null
         );
 
-        this.prevFrameSamplesRendered = gl.createTexture();
-
-        gl.bindTexture(gl.TEXTURE_2D, this.prevFrameSamplesRendered);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, prevFrameFilter);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, prevFrameFilter);
-
+        this.prevFrameSamplesRendered = gl.createTexture();        
+        this.setTexFilters(this.prevFrameSamplesRendered, prevFrameFilter);
         gl.texImage2D(
             gl.TEXTURE_2D, 0, gl.R16F, this.surface.width, this.surface.height, 0, gl.RED, gl.HALF_FLOAT, null
+        );
+
+        this.prevFrameSubpixelOffsets = gl.createTexture();
+        this.setTexFilters(this.prevFrameSubpixelOffsets, prevFrameFilter);
+        gl.texImage2D(
+            gl.TEXTURE_2D, 0, gl.RG32F, this.surface.width, this.surface.height, 0, gl.RG, gl.FLOAT, null
         );
 
         this.prevFramebuffer = gl.createFramebuffer();
@@ -461,6 +469,10 @@ class Raymarcher {
         gl.bindTexture(gl.TEXTURE_2D, this.prevFrameSamplesRendered);
         gl.framebufferTexture2D(
             gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0+1, gl.TEXTURE_2D, this.prevFrameSamplesRendered, 0
+        );
+        gl.bindTexture(gl.TEXTURE_2D, this.prevFrameSubpixelOffsets);
+        gl.framebufferTexture2D(
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0+2, gl.TEXTURE_2D, this.prevFrameSubpixelOffsets, 0
         );
 
 
@@ -486,24 +498,37 @@ class Raymarcher {
         
         //======= CURRENT FRAME =========
         this.currentFrame = gl.createTexture();
-
-        gl.bindTexture(gl.TEXTURE_2D, this.currentFrame);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
+        this.setTexFilters(this.currentFrame, gl.NEAREST);
         gl.texImage2D(
             gl.TEXTURE_2D, 0, gl.RGBA32F, this.surface.width, this.surface.height, 0, gl.RGBA, gl.FLOAT, null
         );
         
         this.currentFrameSamplesRendered = gl.createTexture();
-
-        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameSamplesRendered);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
+        this.setTexFilters(this.currentFrameSamplesRendered, gl.NEAREST);
         gl.texImage2D(
             gl.TEXTURE_2D, 0, gl.R16F, this.surface.width, this.surface.height, 0, gl.RED, gl.HALF_FLOAT, null
         );
+        
+        this.currentFrameNormals = gl.createTexture();
+        this.setTexFilters(this.currentFrameNormals, gl.NEAREST);
+        gl.texImage2D(
+            gl.TEXTURE_2D, 0, gl.RGB8, this.surface.width, this.surface.height, 0, gl.RGB, gl.UNSIGNED_BYTE, null
+        );
+
+        this.currentFrameAlbedo = gl.createTexture();
+        this.setTexFilters(this.currentFrameAlbedo, gl.NEAREST);
+        gl.texImage2D(
+            gl.TEXTURE_2D, 0, gl.RGB8, this.surface.width, this.surface.height, 0, gl.RGB, gl.UNSIGNED_BYTE, null
+        );
+
+        this.currentFrameSubpixelOffsets = gl.createTexture();
+        this.setTexFilters(this.currentFrameSubpixelOffsets, gl.NEAREST);
+        gl.texImage2D(
+            gl.TEXTURE_2D, 0, gl.RG32F, this.surface.width, this.surface.height, 0, gl.RG, gl.FLOAT, null
+        );
+
+        
+
 
         this.currentFramebuffer = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.currentFramebuffer);
@@ -515,9 +540,21 @@ class Raymarcher {
         gl.framebufferTexture2D(
             gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + 1, gl.TEXTURE_2D, this.currentFrameSamplesRendered, 0
         );
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameNormals);
+        gl.framebufferTexture2D(
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + 2, gl.TEXTURE_2D, this.currentFrameNormals, 0
+        );
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameAlbedo);
+        gl.framebufferTexture2D(
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + 3, gl.TEXTURE_2D, this.currentFrameAlbedo, 0
+        );
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameSubpixelOffsets);
+        gl.framebufferTexture2D(
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + 4, gl.TEXTURE_2D, this.currentFrameSubpixelOffsets, 0
+        );
 
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
-        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+        //gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
+        //gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     }
 
     async init() {
@@ -621,7 +658,7 @@ class Raymarcher {
 
         gl.useProgram(this.prog);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
-        this.gl.drawBuffers([this.gl.COLOR_ATTACHMENT0, this.gl.COLOR_ATTACHMENT1]);
+        this.gl.drawBuffers([this.gl.COLOR_ATTACHMENT0, this.gl.COLOR_ATTACHMENT1, this.gl.COLOR_ATTACHMENT2, this.gl.COLOR_ATTACHMENT3, this.gl.COLOR_ATTACHMENT4]);
 
         //if (gl.FRAMEBUFFER_COMPLETE == gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER)) console.log("sdfsdfsdf");
 
@@ -634,9 +671,13 @@ class Raymarcher {
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, this.prevFrameSamplesRendered);
 
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, this.prevFrameSubpixelOffsets);
+
         gl.uniform1i(gl.getUniformLocation(this.prog, "uPrevFrame"), 0);
         gl.uniform1i(gl.getUniformLocation(this.prog, "img"), 1);
         gl.uniform1i(gl.getUniformLocation(this.prog, "uPrevFrameSamplesRendered"), 2);
+        gl.uniform1i(gl.getUniformLocation(this.prog, "uPrevFrameSubpixelOffsetsUnsigned"), 3);
         gl.uniform1f(gl.getUniformLocation(this.prog, "uNoiseSeed"), this.t);
         gl.uniform2fv(gl.getUniformLocation(this.prog, "uViewportSize"), this.shaderState.resolution);
         let aVertexPosition = gl.getAttribLocation(this.prog, "aVertexPosition");
@@ -666,6 +707,9 @@ class Raymarcher {
             gl.drawBuffers([...new Array(i).fill(gl.NONE), gl.COLOR_ATTACHMENT0 + i]);
             gl.blitFramebuffer(0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
         }
+        gl.readBuffer(gl.COLOR_ATTACHMENT0 + 4);
+        gl.drawBuffers([...new Array(2).fill(gl.NONE), gl.COLOR_ATTACHMENT0 + 2]);
+        gl.blitFramebuffer(0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
 
         if (this.resetState == 1) {
             await this.recompileShader();
@@ -700,6 +744,12 @@ class Raymarcher {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, this.currentFrameSamplesRendered);
         this.setUniform(this.toneBalanceProg, "sampleCounts", "1i", 1);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameNormals);
+        this.setUniform(this.toneBalanceProg, "normal", "1i", 2);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, this.currentFrameAlbedo);
+        this.setUniform(this.toneBalanceProg, "albedo", "1i", 3);
         
         let aVertexPosition = gl.getAttribLocation(this.toneBalanceProg, "aVertexPosition");
 
@@ -713,7 +763,7 @@ class Raymarcher {
 
     async clearFramebuffers() {
         this.gl.bindFramebuffer(this.gl.DRAW_FRAMEBUFFER, this.currentFramebuffer);
-        this.gl.drawBuffers([this.gl.COLOR_ATTACHMENT0, this.gl.COLOR_ATTACHMENT1]);
+        this.gl.drawBuffers([this.gl.COLOR_ATTACHMENT0, this.gl.COLOR_ATTACHMENT1, this.gl.COLOR_ATTACHMENT2, this.gl.COLOR_ATTACHMENT3]);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
         this.gl.bindFramebuffer(this.gl.DRAW_FRAMEBUFFER, this.prevFramebuffer);

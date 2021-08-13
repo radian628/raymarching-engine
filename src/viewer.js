@@ -611,12 +611,16 @@ document.addEventListener('mousemove', function (e) {
 let keys = {};
 let singleFrameKeys = {};
 document.addEventListener("keydown", function (e) {
-    keys[e.key.toLowerCase()] = true;
-    singleFrameKeys[e.key.toLowerCase()] = true;
+    if (pointerLockEnabled) {
+        keys[e.key.toLowerCase()] = true;
+        singleFrameKeys[e.key.toLowerCase()] = true;
+    }
 });
 document.addEventListener("keyup", function (e) {
-    keys[e.key.toLowerCase()] = false;
-    singleFrameKeys[e.key.toLowerCase()] = false;
+    if (pointerLockEnabled) {
+        keys[e.key.toLowerCase()] = false;
+        singleFrameKeys[e.key.toLowerCase()] = false;
+    }
 });
 
 
@@ -889,7 +893,7 @@ async function drawLoop() {
             if (singleFrameKeys.r) {
                 isRecording = !isRecording;
                 if (!isRecording) {
-                    Raymarcher.removeDuplicateState(currentRecording);
+                    //Raymarcher.removeDuplicateState(currentRecording);
                     allRecordings.push({
                         data: currentRecording,
                         title: `recording${allRecordings.length}`
