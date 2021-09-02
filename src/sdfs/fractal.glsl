@@ -86,7 +86,7 @@ float fractalSDF(vec3 rayPosition, vec3 spherePosition, float sphereRadius, out 
     color = clamp(vec3(minDist, minDist2, minDist3) * 0.25, 0.0, 1.0);
     if (length(rayPosition) > 100.0) {
         background = true;
-        color = vec3(0.3, 0.4, 0.5) * (dot(normalize(uLambertLightLocation), normalize(rayPosition)) * 0.5 + 0.5) * 3.0;
+        color = 5.0 * vec3(0.3, 0.4, 0.5) * (dot(normalize(uLambertLightLocation), normalize(rayPosition)) * 0.5 + 0.5) * 3.0;
     }
     roughness = 1.0 - color.x;
     return result;

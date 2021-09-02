@@ -482,7 +482,6 @@ class Raymarcher {
         let img = new Image();
 
         img.onload = () => {
-            console.log("got here")
             this.img = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this.img);
 

@@ -302,7 +302,10 @@ void doSample(out vec3 outColor, out vec3 primaryRayHit, int reflections, out ve
     coords.y *= 1.5 * uFOV;
     
 #ifdef REPROJECT
-    vec2 cameraNoiseVecs = vec2(0.0);
+    vec2 cameraNoiseVecs = (vec2(
+        rand(),
+        rand()
+    ) - vec2(0.5)) / uViewportSize * 0.0 * uFOV;
 #else
     vec2 cameraNoiseVecs = (vec2(
         rand(),

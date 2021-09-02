@@ -753,7 +753,8 @@ function addRecording(recording, whereToPutRecordings) {
     playRecording.innerText = "Play";
     playRecording.addEventListener("click", () => {
         isDoingPlayback = true;
-        recordingToPlay = recording;
+        recordingToPlay = JSON.parse(JSON.stringify(recording));
+        Raymarcher.removeDuplicateState(recordingToPlay.data);
         playbackFrame = 0;
     });
     container.appendChild(playRecording);
@@ -800,6 +801,13 @@ let playbackFrame = 0;
 let savedViewerRaymarcherState;
 
 async function drawLoop() {
+
+    Array.from(document.querySelectorAll(".CodeMirror")).forEach(elem => {
+        if (Number(elem.style.height.slice(0, -2)) > window.innerHeight * 0.9) {
+            elem.style.height = window.innerHeight * 0.9 + "px";
+        }
+    });
+
     if (isWaitingForRendering) {
         savedViewerRaymarcherState = raymarcher.getAllShaderState();
 
@@ -824,7 +832,7 @@ async function drawLoop() {
         };
     
         transformerFunc(recording, renderSettings);
-        Raymarcher.removeDuplicateState(recording.data, );
+        Raymarcher.removeDuplicateState(recording.data);
     
         await tiledRenderer.startRender(recording.data, renderSettings.partitions, renderSettings.samples, renderSettings.url);
     } else if (isRendering) {
