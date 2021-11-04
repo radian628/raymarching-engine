@@ -15,6 +15,7 @@ canvas {
 
 .CodeMirror {
     resize: vertical;
+    max-height: 90%;
 }
 
 #shader-input-container .CodeMirror {

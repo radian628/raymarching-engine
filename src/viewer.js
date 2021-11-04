@@ -804,7 +804,8 @@ async function drawLoop() {
 
     Array.from(document.querySelectorAll(".CodeMirror")).forEach(elem => {
         if (Number(elem.style.height.slice(0, -2)) > window.innerHeight * 0.9) {
-            elem.style.height = window.innerHeight * 0.9 + "px";
+          elem.style.height = window.innerHeight * 0.9 + "px";
+          elem.style.maxHeight = "90%";
         }
     });
 
