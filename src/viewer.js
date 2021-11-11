@@ -668,6 +668,7 @@ function initSettingsMenu() {
 let tiledRenderer;
 
 async function init() {
+    let urlSearchParams = new URLSearchParams(window.location.search);
 
     createUITabs(document.getElementById("tab-switcher"), uiTabs);
     
@@ -710,6 +711,11 @@ async function init() {
         //sdfTextarea.value = (await request(`sdfs/${shaderChooser.value}`)).response;
         changeSDF();
     });
+
+    if (urlSearchParams.has("sdf")) {
+        shaderChooser.value = urlSearchParams.get("sdf");
+        shaderChooser.dispatchEvent(new Event("change"));
+    }
 
     //======================================== SETTING PRESETS ======================================
 
@@ -902,7 +908,6 @@ async function drawLoop() {
             if (singleFrameKeys.r) {
                 isRecording = !isRecording;
                 if (!isRecording) {
-                    //Raymarcher.removeDuplicateState(currentRecording);
                     allRecordings.push({
                         data: currentRecording,
                         title: `recording${allRecordings.length}`
@@ -924,16 +929,7 @@ async function drawLoop() {
     
             raymarcher.setShaderState("uTime", t);
     
-            //raymarcher.position = playerTransform.position;
             raymarcher.setShaderState("rotation", playerTransform.quatRotation);
-    
-            // let fractalRotateQuat = [0, 1, 0, 0];
-    
-            // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation1, [1, 0, 0]));
-            // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation2, [0, 1, 0]));
-            // fractalRotateQuat = quatMultiply(fractalRotateQuat, quatAngleAxis(rmSettings.fractalRotation3, [0, 0, 1]));
-    
-            // raymarcher.uFractalRotation = fractalRotateQuat;
     
             if (!rmSettings.values.motionBlur) {
                 raymarcher.setShaderState("uMotionBlurPrevPos", playerTransform.position);
