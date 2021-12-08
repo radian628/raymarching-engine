@@ -15,9 +15,9 @@ In order to host this project yourself, you will need to run a web server (rathe
 
 ## Example Images
  Some images I created with this rendering engine.
- ![menger sponge fractal](blob/main/samples/mengersponge1.png)
- ![fractal that looks like swiss cheese but with way too many holes sort of](blob/main/samples/cheese.png)
- ![grid of cubes](blob/main/samples/cubes.png)
- ![fractal with light shafts AKA "god rays"](blob/main/samples/fractalgodrays.png)
- ![tree fractal](blob/main/samples/tree0.png)
- ![fractal that looks a bit like office buildings](blob/main/samples/office.png)
+ ![menger sponge fractal](samples/mengersponge1.png)
+ ![fractal that looks like swiss cheese but with way too many holes sort of](samples/cheese.png)
+ ![grid of cubes](samples/cubes.png)
+ ![fractal with light shafts AKA "god rays"](samples/fractalgodrays.png)
+ ![tree fractal](samples/tree0.png)
+ ![fractal that looks a bit like office buildings](samples/office.png)
