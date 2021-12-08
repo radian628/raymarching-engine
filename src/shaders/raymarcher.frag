@@ -319,7 +319,33 @@ void doSample(out vec3 outColor, out vec3 primaryRayHit, int reflections, out ve
         rand()
     ) - vec3(0.5);
 
-    vec3 cameraPosVecs = noiseVec3 * uDOFStrength;
+
+    // vec2 bokehSampleSigns = sign(vec2(rand(),rand())-0.5);
+    // float whichSide = rand();
+    // vec3 bokeh = vec3(rand() * 2.0 - 1.0, vec2(rand(), rand())*0.1+bokehSampleSigns);
+    // if (whichSide < 0.33333) {
+    //   bokeh = bokeh;
+    // } else if (whichSide < 0.66666) {
+    //   bokeh = bokeh.yxz;
+    // } else {
+    //   bokeh = bokeh.yzx;
+    // }
+
+    vec3 bokeh = vec3(rand(), rand(), rand()) - vec3(0.5);
+    // for (float i = 0.0; i < 10.0; i++) {
+    //   float choice = rand()*4.0;
+    //   if (choice < 1.0) {
+    //     bokeh = mix(bokeh, vec3(1.0, 0.0, 0.0), 0.5);
+    //   } else if (choice < 2.0) {
+    //     bokeh = mix(bokeh, vec3(0.0, 0.0, 0.0), 0.5);
+    //   } else if (choice < 3.0) {
+    //     bokeh = mix(bokeh, vec3(0.0, 1.0, 0.0), 0.5);
+    //   } else {
+    //     bokeh = mix(bokeh, vec3(0.0, 0.0, 1.0), 0.5);
+    //   }
+    // }
+
+    vec3 cameraPosVecs = bokeh * uDOFStrength; //* vec3(0.1, 0.1, 1.0);
 
     uLambertLightLocation2 = uLambertLightLocation + noiseVec3 * uShadowSoftness;
 
