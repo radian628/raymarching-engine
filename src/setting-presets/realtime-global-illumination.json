@@ -1,9 +1,0 @@
-{
-    "uShadowBrightness": 0,
-    "uAOStrength": 0,
-    "reflections": 3,
-    "reproject": true,
-    "uLightStrength": 1,
-    "raymarchingSteps": 64,
-    "resolutionFactor": 0.5
-}
