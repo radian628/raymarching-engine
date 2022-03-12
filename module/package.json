@@ -1,0 +1,10 @@
+{
+    "name": "raymarching-engine",
+    "version": "0.1.0",
+    "dependencies": {
+        "typescript": "^4.6.2"
+    },
+    "scripts": {
+        "start": "npx tsc --watch"
+    }
+}
