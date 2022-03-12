@@ -1,5 +1,7 @@
 #version 300 es
 
+precision highp float;
+
 in vec2 in_position;
 out vec4 fragColor;
 
@@ -166,7 +168,7 @@ float roughness(vec3 position) {
 
 void marchRay(vec3 startPosition, vec3 direction, uint steps, out vec3 finalPosition) {
   vec3 position = startPosition;
-  for (uint i = 0; i < steps; i++) {
+  for (uint i = 0u; i < steps; i++) {
     position += direction * SDF(position);
   }
   finalPosition = position;
@@ -198,7 +200,7 @@ vec2 randInCircle() {
 
 vec3 getSample() {
   //vec3 directionWithoutDOF = rotateQuat(normalize(vec3((in_position.xy + vec2(rand(), rand()) / textureSize(prevFrameColor, 0)) * fovs, 1.00)), cameraRotation);
-  vec2 directionProjectedThroughZEqualsOne = (in_position.xy + vec2(rand(), rand()) / textureSize(prevFrameColor, 0)) * fovs;
+  vec2 directionProjectedThroughZEqualsOne = (in_position.xy + vec2(rand(), rand()) / vec2(textureSize(prevFrameColor, 0))) * fovs;
   vec3 directionWithoutRotationOrDOF = vec3(directionProjectedThroughZEqualsOne, 1.0);
   vec3 vecFromPositionToFocalPlane = rotateQuat(directionWithoutRotationOrDOF, cameraRotation) * focalPlaneDistance;
   vec2 circleOfConfusionNoise = randInCircle() * circleOfConfusionRadius;
@@ -209,7 +211,7 @@ vec3 getSample() {
   vec3 rayStartPosition = cameraPosition + circleOfConfusionOffset;
   vec3 accumulatedLight = vec3(0.0);
   vec3 accumulatedAlbedo = vec3(1.0);
-  for (uint i = 0; i < reflections; i++) {
+  for (uint i = 0u; i < reflections; i++) {
     marchRay(rayStartPosition, direction, primaryRaymarchingSteps, finalPosition);
 
     const float lambda = 1.1;
@@ -249,13 +251,15 @@ void main() {
   vec2 texCoord = in_position.xy * 0.5 + 0.5;
   seed = in_position.xy + randNoise;
   vec3 color = vec3(0.0);
-  for (uint i = 0; i < 1; i++) {
+  for (uint i = 0u; i < 1u; i++) {
     color += getSample();
   }
   color /= 1.0;
+  //fragColor = vec4(color, 1.0);
   if (isAdditive) {
     fragColor = vec4(color * blendFactor + texture(prevFrameColor, texCoord).rgb, 1.0);
   } else {
     fragColor = vec4(mix(color, texture(prevFrameColor, texCoord).rgb, blendFactor), 1.0);
   }
+  //fragColor = vec4(1.0, 0.0, 0.0, 1.0);
 }

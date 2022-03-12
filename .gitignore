@@ -1,3 +1,5 @@
 src/recordings/**
 downloader-server/output/**
 .vscode
+*/node_modules
+*/build

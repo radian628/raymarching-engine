@@ -1,7 +1,10 @@
 {
     "compilerOptions": {
-        "outDir": "build",
+        "outDir": "./build",
         "module": "es2022",
         "target": "ES2017"
-    }
+    },
+    "include": [
+        "src/**/*"
+    ]
 }
