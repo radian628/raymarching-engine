@@ -91,6 +91,8 @@ function doMultiNestedLoop(callback: Function, ...args: number[]) {
 export function* doRenderTask(options: RenderTaskOptions) {
     let gl = options.state.gl;
     
+    gl.viewport(0, 0, options.state.width, options.state.height);
+
     if (isShaderUpdateNeeded(
         options.state.shader.compileOptions, 
         options.shaderCompileOptions
@@ -118,17 +120,20 @@ export function* doRenderTask(options: RenderTaskOptions) {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, options.state.texture.prev);
+
     setUniforms({
-       cameraPosition: ["f", [0, 0, 0]],
+       cameraPosition: ["f", [0, 0, 1.1]],
        cameraRotation: ["f", [1, 0, 0, 0]],
        fovs: ["f", [1.5 * 16/9, 1.5]],
        primaryRaymarchingSteps: ["ui", 64],
        reflections: ["ui", 3],
        randNoise: ["f", [Math.random(), Math.random()]],
        isAdditive: ["i", 1],
-       blendFactor: ["f", 1],
+       blendFactor: ["f", 0.1],
        focalPlaneDistance: ["f", 0.25],
-       circleOfConfusionRadius: ["f", 0.001],
+       circleOfConfusionRadius: ["f", 0.0],
        prevFrameColor: ["i", 0]
     }, options.state.shader.program, gl);
 
@@ -144,12 +149,39 @@ export function* doRenderTask(options: RenderTaskOptions) {
                 setUniforms({
                     randNoise: ["f", [Math.random(), Math.random()]]
                 }, options.state.shader.program, gl);
+                gl.bindFramebuffer(
+                    gl.DRAW_FRAMEBUFFER, 
+                    options.state.framebuffer.current
+                );
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
-                // gl.blitFramebuffer(
-                //     0, 0, options.state.width, options.state.height,
-                //     0, 0, options.state.width, options.state.height,
-                //     gl.COLOR_BUFFER_BIT, gl.NEAREST
-                // );
+
+                gl.bindFramebuffer(
+                    gl.READ_FRAMEBUFFER, 
+                    options.state.framebuffer.current
+                );
+                gl.bindFramebuffer(
+                    gl.DRAW_FRAMEBUFFER, 
+                    options.state.framebuffer.prev
+                );
+                gl.blitFramebuffer(
+                    0, 0, options.state.width, options.state.height,
+                    0, 0, options.state.width, options.state.height,
+                    gl.COLOR_BUFFER_BIT, gl.NEAREST
+                );
+
+                gl.bindFramebuffer(
+                    gl.READ_FRAMEBUFFER, 
+                    options.state.framebuffer.current
+                );
+                gl.bindFramebuffer(
+                    gl.DRAW_FRAMEBUFFER, 
+                    null
+                );
+                gl.blitFramebuffer(
+                    0, 0, options.state.width, options.state.height,
+                    0, 0, options.state.width, options.state.height,
+                    gl.COLOR_BUFFER_BIT, gl.NEAREST
+                );
                 yield;
             }
         }
@@ -163,7 +195,10 @@ function setNearestFilter(tex: WebGLTexture, gl: WebGL2RenderingContext) {
 }
 
 export function createRenderState(options: RenderStateOptions): RenderState {
-    let gl = options.canvas.getContext("webgl2");
+    let gl = options.canvas.getContext("webgl2", { 
+        antialias: false,
+        preserveDrawingBuffer: true
+    });
     gl.getExtension("EXT_color_buffer_float");
     gl.getExtension("OES_texture_float_linear");
 
@@ -183,11 +218,21 @@ export function createRenderState(options: RenderStateOptions): RenderState {
     gl.texImage2D(
         gl.TEXTURE_2D, 0, gl.RGBA16F, options.width, options.height, 0, gl.RGBA, gl.HALF_FLOAT, null
     );
+    gl.bindFramebuffer(gl.FRAMEBUFFER, prevFramebuffer);
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D,
+        prevTexture, 0
+    );
 
     let currentTexture = gl.createTexture();
     setNearestFilter(currentTexture, gl);
     gl.texImage2D(
         gl.TEXTURE_2D, 0, gl.RGBA16F, options.width, options.height, 0, gl.RGBA, gl.HALF_FLOAT, null
+    );
+    gl.bindFramebuffer(gl.FRAMEBUFFER, currentFramebuffer);
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D,
+        currentTexture, 0
     );
 
     let vertexShader = gl.createShader(gl.VERTEX_SHADER);

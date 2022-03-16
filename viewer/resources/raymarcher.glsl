@@ -147,14 +147,14 @@ vec3 emission(vec3 position) {
     return vec3(0.0);
   } else if (sdf == PRIMITIVE2(position)) {
     return 
-    vec3(1.0 + rand(), 0.2 + rand(), 0.0 + rand()) * 25.5 *
+    vec3(1.0 + rand(), 0.2 + rand(), 0.0 + rand()) * 5.5 *
     pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(1.0, 1.0, -1.0)))), 32.0);// + 
     //vec3(0.9, 0.5, 0.1) * 5.5 *
     //pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(1.0, -1.0, -1.0)))), 16.0) + 
     //vec3(0.7, 0.7, 0.3) * 5.5 *
     //pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(-1.0, 1.0, -1.0)))), 16.0);
   } else if (sdf == PRIMITIVE3(position)) {
-    return vec3(0.3, 0.4, 0.8) * 30.0;
+    return vec3(0.3, 0.4, 0.8) * 6.0;
   }
 }
 
@@ -214,7 +214,7 @@ vec3 getSample() {
   for (uint i = 0u; i < reflections; i++) {
     marchRay(rayStartPosition, direction, primaryRaymarchingSteps, finalPosition);
 
-    const float lambda = 1.1;
+    const float lambda = 0.1;
     const float E = 2.71828183;
 
     float pathLength = distance(rayStartPosition, finalPosition);
