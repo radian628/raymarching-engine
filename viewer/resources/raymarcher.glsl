@@ -25,6 +25,9 @@ uniform float blendFactor;
 uniform float focalPlaneDistance;
 uniform float circleOfConfusionRadius;
 
+//fog
+uniform float fogDensity;
+
 uniform sampler2D prevFrameColor;
 
 const float PI = 3.14159265;
@@ -214,7 +217,7 @@ vec3 getSample() {
   for (uint i = 0u; i < reflections; i++) {
     marchRay(rayStartPosition, direction, primaryRaymarchingSteps, finalPosition);
 
-    const float lambda = 0.1;
+    float lambda = fogDensity;
     const float E = 2.71828183;
 
     float pathLength = distance(rayStartPosition, finalPosition);

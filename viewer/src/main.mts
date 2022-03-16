@@ -2,24 +2,43 @@ import * as raymarch from "../../module/build/main.mjs";
 
 let canvas = document.getElementById("canvas") as HTMLCanvasElement;
 
+
+
 let renderState = raymarch.createRenderState({
-    width: 1920/4,
-    height: 1080/4,
+    width: 1920,
+    height: 1080,
     canvas
 });
 
 let renderTask = raymarch.doRenderTask({
   state: renderState,
-  subdivX: 1,
-  subdivY: 1,
-  iterations: 40,
-  shaderCompileOptions: { change: false }
+  subdivX: 4,
+  subdivY: 4,
+  iterations: 512,
+  shaderCompileOptions: { change: false },
+
+  uniforms: {
+      camera: {
+          position: [0, 0, 1.1],
+          rotation: [1, 0, 0, 0]
+      },
+      fovs: [1.5 * 16/9, 1.5],
+      primaryRaymarchingSteps: 64,
+      reflections: 7,
+      isAdditive: true,
+      blendFactor: 0.03,
+      dof: {
+          distance: 0.25,
+          amount: 0.005
+      },
+      fogDensity: 0.2
+  }
 });
 
 let loopIndex = 0;
 function loop() {
-  renderTask.next(); 
-  if (loopIndex < 40) {
+  let task = renderTask.next(); 
+  if (!task.done) {
     loopIndex++;
     requestAnimationFrame(loop);
   }

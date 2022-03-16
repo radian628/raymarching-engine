@@ -37,7 +37,24 @@ interface RenderTaskOptions {
     subdivX: number,
     subdivY: number,
     iterations: number,
-    shaderCompileOptions: ShaderCompileOptions
+    shaderCompileOptions: ShaderCompileOptions,
+
+    uniforms: {
+        camera: {
+            position: [number, number, number],
+            rotation: [number, number, number, number]
+        },
+        fovs: [number, number],
+        primaryRaymarchingSteps: number,
+        reflections: number,
+        isAdditive: boolean,
+        blendFactor: number,
+        dof: {
+            distance: number,
+            amount: number
+        },
+        fogDensity: number
+    }
 };
 
 interface Uniforms {
@@ -124,17 +141,18 @@ export function* doRenderTask(options: RenderTaskOptions) {
     gl.bindTexture(gl.TEXTURE_2D, options.state.texture.prev);
 
     setUniforms({
-       cameraPosition: ["f", [0, 0, 1.1]],
-       cameraRotation: ["f", [1, 0, 0, 0]],
-       fovs: ["f", [1.5 * 16/9, 1.5]],
-       primaryRaymarchingSteps: ["ui", 64],
-       reflections: ["ui", 3],
+       cameraPosition: ["f", options.uniforms.camera.position],
+       cameraRotation: ["f", options.uniforms.camera.rotation],
+       fovs: ["f", options.uniforms.fovs],
+       primaryRaymarchingSteps: ["ui", options.uniforms.primaryRaymarchingSteps],
+       reflections: ["ui", options.uniforms.reflections],
        randNoise: ["f", [Math.random(), Math.random()]],
-       isAdditive: ["i", 1],
-       blendFactor: ["f", 0.1],
-       focalPlaneDistance: ["f", 0.25],
-       circleOfConfusionRadius: ["f", 0.0],
-       prevFrameColor: ["i", 0]
+       isAdditive: ["i", options.uniforms.isAdditive ? 1 : 0],
+       blendFactor: ["f", options.uniforms.blendFactor],
+       focalPlaneDistance: ["f", options.uniforms.dof.distance],
+       circleOfConfusionRadius: ["f", options.uniforms.dof.amount],
+       prevFrameColor: ["i", 0],
+       fogDensity: ["f", options.uniforms.fogDensity]
     }, options.state.shader.program, gl);
 
     for (let y = 0; y < options.subdivY; y++) {
@@ -145,7 +163,7 @@ export function* doRenderTask(options: RenderTaskOptions) {
                 options.state.width / options.subdivX,
                 options.state.height / options.subdivY
             );
-            for (let i = 0; i < options.iterations; x++) {
+            for (let i = 0; i < options.iterations; i++) {
                 setUniforms({
                     randNoise: ["f", [Math.random(), Math.random()]]
                 }, options.state.shader.program, gl);
