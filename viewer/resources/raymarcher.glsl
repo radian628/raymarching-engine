@@ -225,15 +225,15 @@ vec3 getSample() {
     vec2 circleOfConfusionNoise = randInCircle() * circleOfConfusionRadius;
     vec3 circleOfConfusionOffset = rotateQuat(vec3(circleOfConfusionNoise, 0.0), cameraRotation);
     vec3 direction = normalize(vecFromPositionToFocalPlane - circleOfConfusionOffset);
-    vec3 finalPosition;
-  if (isRealtimeMode) {
-    uint stepCount;
-    marchRay(cameraPosition, direction, primaryRaymarchingSteps, finalPosition, stepCount);
-    return vec3(float(stepCount) / float(primaryRaymarchingSteps));
-
-  } else {
-
     vec3 rayStartPosition = cameraPosition + circleOfConfusionOffset;
+    vec3 finalPosition;
+  #define IS_REALTIME_MODE
+  #ifdef IS_REALTIME_MODE
+    uint stepCount;
+    marchRay(rayStartPosition, direction, primaryRaymarchingSteps, finalPosition, stepCount);
+    return vec3(float(stepCount) / float(primaryRaymarchingSteps));
+  #else
+
     vec3 accumulatedLight = vec3(0.0);
     vec3 accumulatedAlbedo = vec3(1.0);
     for (uint i = 0u; i < reflections; i++) {
@@ -270,7 +270,7 @@ vec3 getSample() {
   
     }
     return accumulatedLight;
-  }
+  #endif
 }
 
 void main() {

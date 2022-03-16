@@ -67,6 +67,7 @@ interface Uniforms {
 }
 
 function setUniforms(uniforms: Uniforms, program: WebGLProgram, gl: WebGL2RenderingContext) {
+    //console.log("setUniforms called");
     for (let [uniformName, [uniformType, uniformValue]] of Object.entries(uniforms)) {
         let uniformLocation = gl.getUniformLocation(program, uniformName);
         if (typeof uniformValue == "number") {
