@@ -1,6 +1,10 @@
-let RAYMARCHER_SRC = await (await fetch("./resources/raymarcher.glsl")).text();
-let VERTEX_SRC = await (await fetch("./resources/vertex.glsl")).text();
+let RAYMARCHER_SRC;
+let VERTEX_SRC; 
 
+export async function loadShaders() {
+    RAYMARCHER_SRC = await (await fetch("../resources/raymarcher.glsl")).text();
+    VERTEX_SRC = await (await fetch("../resources/vertex.glsl")).text();
+}
 interface ShaderCompileOptions {
     change: boolean
 }
@@ -53,7 +57,8 @@ interface RenderTaskOptions {
             distance: number,
             amount: number
         },
-        fogDensity: number
+        fogDensity: number,
+        isRealtimeMode: boolean
     }
 };
 
@@ -152,7 +157,8 @@ export function* doRenderTask(options: RenderTaskOptions) {
        focalPlaneDistance: ["f", options.uniforms.dof.distance],
        circleOfConfusionRadius: ["f", options.uniforms.dof.amount],
        prevFrameColor: ["i", 0],
-       fogDensity: ["f", options.uniforms.fogDensity]
+       fogDensity: ["f", options.uniforms.fogDensity],
+       isRealtimeMode: ["ui", options.uniforms.isRealtimeMode ? 1 : 0]
     }, options.state.shader.program, gl);
 
     for (let y = 0; y < options.subdivY; y++) {

@@ -28,6 +28,9 @@ uniform float circleOfConfusionRadius;
 //fog
 uniform float fogDensity;
 
+//realtime mode
+uniform bool isRealtimeMode;
+
 uniform sampler2D prevFrameColor;
 
 const float PI = 3.14159265;
@@ -177,6 +180,20 @@ void marchRay(vec3 startPosition, vec3 direction, uint steps, out vec3 finalPosi
   finalPosition = position;
 }
 
+void marchRay(vec3 startPosition, vec3 direction, uint steps, out vec3 finalPosition, out uint stepCount) {
+  vec3 position = startPosition;
+  for (uint i = 0u; i < steps; i++) {
+    float distance = SDF(position);
+    position += direction * distance;
+    if (distance > 0.0001) {
+      stepCount = i;
+    }
+  }
+  finalPosition = position;
+}
+
+
+
 vec3 gradient(vec3 position, float delta) {
   float sdf = SDF(position);
   return (vec3(
@@ -202,52 +219,58 @@ vec2 randInCircle() {
 }
 
 vec3 getSample() {
-  //vec3 directionWithoutDOF = rotateQuat(normalize(vec3((in_position.xy + vec2(rand(), rand()) / textureSize(prevFrameColor, 0)) * fovs, 1.00)), cameraRotation);
-  vec2 directionProjectedThroughZEqualsOne = (in_position.xy + vec2(rand(), rand()) / vec2(textureSize(prevFrameColor, 0))) * fovs;
-  vec3 directionWithoutRotationOrDOF = vec3(directionProjectedThroughZEqualsOne, 1.0);
-  vec3 vecFromPositionToFocalPlane = rotateQuat(directionWithoutRotationOrDOF, cameraRotation) * focalPlaneDistance;
-  vec2 circleOfConfusionNoise = randInCircle() * circleOfConfusionRadius;
-  vec3 circleOfConfusionOffset = rotateQuat(vec3(circleOfConfusionNoise, 0.0), cameraRotation);
-  vec3 direction = normalize(vecFromPositionToFocalPlane - circleOfConfusionOffset);
-  //vec3 target = cameraPosition + directionWithoutDOF * focalPlaneDistance;
-  vec3 finalPosition;
-  vec3 rayStartPosition = cameraPosition + circleOfConfusionOffset;
-  vec3 accumulatedLight = vec3(0.0);
-  vec3 accumulatedAlbedo = vec3(1.0);
-  for (uint i = 0u; i < reflections; i++) {
-    marchRay(rayStartPosition, direction, primaryRaymarchingSteps, finalPosition);
+    vec2 directionProjectedThroughZEqualsOne = (in_position.xy + vec2(rand(), rand()) / vec2(textureSize(prevFrameColor, 0))) * fovs;
+    vec3 directionWithoutRotationOrDOF = vec3(directionProjectedThroughZEqualsOne, 1.0);
+    vec3 vecFromPositionToFocalPlane = rotateQuat(directionWithoutRotationOrDOF, cameraRotation) * focalPlaneDistance;
+    vec2 circleOfConfusionNoise = randInCircle() * circleOfConfusionRadius;
+    vec3 circleOfConfusionOffset = rotateQuat(vec3(circleOfConfusionNoise, 0.0), cameraRotation);
+    vec3 direction = normalize(vecFromPositionToFocalPlane - circleOfConfusionOffset);
+    vec3 finalPosition;
+  if (isRealtimeMode) {
+    uint stepCount;
+    marchRay(cameraPosition, direction, primaryRaymarchingSteps, finalPosition, stepCount);
+    return vec3(float(stepCount) / float(primaryRaymarchingSteps));
 
-    float lambda = fogDensity;
-    const float E = 2.71828183;
+  } else {
 
-    float pathLength = distance(rayStartPosition, finalPosition);
+    vec3 rayStartPosition = cameraPosition + circleOfConfusionOffset;
+    vec3 accumulatedLight = vec3(0.0);
+    vec3 accumulatedAlbedo = vec3(1.0);
+    for (uint i = 0u; i < reflections; i++) {
+      marchRay(rayStartPosition, direction, primaryRaymarchingSteps, finalPosition);
 
-    //float volumetricChance = 1.0 - exp(-lambda * pathLength);
-    
-    float volumetricSample = -1.0 / lambda * log(1.0 - rand());
+      float lambda = fogDensity;
+      const float E = 2.71828183;
 
-    if (volumetricSample < pathLength) {
-      //float volumetricPositionFactor = lambda * exp(-lambda * pathLength);
-      rayStartPosition = rayStartPosition + direction * volumetricSample;
-      direction = normalize(vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x));
-      //vec3 randVec = vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x);
-      //direction = rotateQuat(direction, quatAngleAxis(0.6, normalize(cross(randVec, direction))));
-    } else {
-      accumulatedLight += emission(finalPosition) * accumulatedAlbedo;
-      accumulatedAlbedo *= albedo(finalPosition);
+      float pathLength = distance(rayStartPosition, finalPosition);
+
+      //float volumetricChance = 1.0 - exp(-lambda * pathLength);
       
-      vec3 normal = normalize(gradientNoDiv(finalPosition, 0.0001));
-      vec3 reflectDirection = reflect(direction, normal);
-      direction = normalize(
-        mix(reflectDirection, normalize(hemisphericalSample(normal)), roughness(finalPosition))
-      );
-      rayStartPosition = finalPosition + direction * 0.001;
+      float volumetricSample = -1.0 / lambda * log(1.0 - rand());
+
+      if (volumetricSample < pathLength) {
+        //float volumetricPositionFactor = lambda * exp(-lambda * pathLength);
+        rayStartPosition = rayStartPosition + direction * volumetricSample;
+        direction = normalize(vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x));
+        //vec3 randVec = vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x);
+        //direction = rotateQuat(direction, quatAngleAxis(0.6, normalize(cross(randVec, direction))));
+      } else {
+        accumulatedLight += emission(finalPosition) * accumulatedAlbedo;
+        accumulatedAlbedo *= albedo(finalPosition);
+        
+        vec3 normal = normalize(gradientNoDiv(finalPosition, 0.0001));
+        vec3 reflectDirection = reflect(direction, normal);
+        direction = normalize(
+          mix(reflectDirection, normalize(hemisphericalSample(normal)), roughness(finalPosition))
+        );
+        rayStartPosition = finalPosition + direction * 0.001;
+      }
+      
+      //accumulatedAlbedo *= max(1.0 - volumetricChance, 0.0);
+  
     }
-    
-    //accumulatedAlbedo *= max(1.0 - volumetricChance, 0.0);
- 
+    return accumulatedLight;
   }
-  return accumulatedLight;
 }
 
 void main() {
