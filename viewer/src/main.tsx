@@ -1,65 +1,134 @@
 import * as raymarch from "../../module/build/main.mjs";
-import * as React from "react";
+import React, { useEffect } from "react";
 import * as ReactDOM from "react-dom";
 import { quat, vec3 } from "gl-matrix";
 
 import "./index.css";
 
-function MainCanvas () {
-  let canvas = <canvas ref={c => {
-    main(c);
-  }} id="canvas" width="480" height="270"></canvas>
-  return canvas;
-}
+type KeyPollSource = { [key: string]: boolean };
 
-ReactDOM.render(MainCanvas(), document.getElementById("app-container"));
+const MainCanvas = () => {
 
-let z = 0;
 
-let currentRotation = 0;
+  let canvasRef = canvasDomNode => { 
+    let renderState;
+    let keysDown: KeyPollSource = {};
+    document.addEventListener("keydown", e => {
+      keysDown[e.key.toLowerCase()] = true;
+    });
+    document.addEventListener("keyup", e => {
+      keysDown[e.key.toLowerCase()] = false;
+    });
 
-async function main(canvas: HTMLCanvasElement) {
-  await raymarch.loadShaders();
-  let renderState = raymarch.createRenderState({
-      width: 1920/4,
-      height: 1080/4,
-      canvas
-  });
+    window.addEventListener("resize", () => {
+      canvasDomNode.width = window.innerWidth;
+      canvasDomNode.height = window.innerHeight;
+      renderState = raymarch.createRenderState({
+        width:  window.innerWidth,
+        height:  window.innerHeight,
+        canvas: canvasDomNode,
+      });
+    });
 
-  function loop() {
+    window.dispatchEvent(new Event("resize"));
 
-    z -= 0.001;
-    currentRotation += 0.001;
+    let z = 0;
 
-    let renderTask = raymarch.doRenderTask({
-      state: renderState,
-      subdivX: 1,
-      subdivY: 1,
-      iterations: 1,
-      shaderCompileOptions: { change: false },
+    function loop() {
+      console.log(keysDown);
+      if (keysDown.w) z -= 0.001;
+      let renderTask = raymarch.doRenderTask({
+        state: renderState,
+        subdivX: 1,
+        subdivY: 1,
+        iterations: 1,
+        shaderCompileOptions: { change: false },
 
-      uniforms: {
+        uniforms: {
           camera: {
-              position: vec3.add([0, 0, 0], [0, 0, 3.97], [z, z, z]),
-              rotation: quat.rotateY(quat.identity([0,0,0,0]), quat.identity([0,0,0,0]), currentRotation)
+            position: vec3.add([0, 0, 0], [0, 0, 3.97], [z, z, z]),
+            rotation: quat.rotateY(
+              quat.identity([0, 0, 0, 0]),
+              quat.identity([0, 0, 0, 0]),
+              3
+            ),
           },
-          fovs: [1.5 * 16/9, 1.5],
+          fovs: [1.5 * window.innerWidth / window.innerHeight, 1.5],
           primaryRaymarchingSteps: 64,
           reflections: 3,
           isAdditive: false,
-          blendFactor: 0.5, 
+          blendFactor: 0.95,
           dof: {
-              distance: 0.25, 
-              amount: 0.0
+            distance: 0.25,
+            amount: 0.0,
           },
           fogDensity: 0.0,
-          isRealtimeMode: true
-      }
-    });
+          isRealtimeMode: true,
+        },
+      }); 
+      let task = renderTask.next();
 
-    let task = renderTask.next();
-
-    requestAnimationFrame(loop);
+      requestAnimationFrame(loop);
+    }
+    loop();
   }
-  loop();
+  return <canvas
+    ref={canvasRef}
+    id="canvas"
+    width="1920"
+    height="1080"
+  ></canvas>;
 }
+
+
+async function main() {
+  await raymarch.loadShaders();
+  ReactDOM.render(<MainCanvas></MainCanvas>, document.getElementById("app-container"));
+  //let renderState = ;
+
+  // let z = 0;
+  // let currentRotation = 0;
+
+  // function loop() {
+  //   z -= 0.001;
+  //   currentRotation += 0.005;
+
+  //   let renderTask = raymarch.doRenderTask({
+  //     state: renderState,
+  //     subdivX: 1,
+  //     subdivY: 1,
+  //     iterations: 1,
+  //     shaderCompileOptions: { change: false },
+
+  //     uniforms: {
+  //       camera: {
+  //         position: vec3.add([0, 0, 0], [0, 0, 3.97], [z, z, z]),
+  //         rotation: quat.rotateY(
+  //           quat.identity([0, 0, 0, 0]),
+  //           quat.identity([0, 0, 0, 0]),
+  //           currentRotation
+  //         ),
+  //       },
+  //       fovs: [(1.5 * 16) / 9, 1.5],
+  //       primaryRaymarchingSteps: 64,
+  //       reflections: 3,
+  //       isAdditive: false,
+  //       blendFactor: 0.5,
+  //       dof: {
+  //         distance: 0.25,
+  //         amount: 0.0,
+  //       },
+  //       fogDensity: 0.0,
+  //       isRealtimeMode: true,
+  //     },
+  //   });
+
+  //   let task = renderTask.next();
+
+  //   requestAnimationFrame(loop);
+  // }
+  // loop();
+}
+
+
+main();

@@ -127,8 +127,6 @@ export function* doRenderTask(options: RenderTaskOptions) {
         gl.deleteProgram(shader.program);
         shader.program = gl.createProgram();
         makeProgram(shader.program, shader.vertex, shader.fragment, gl);
-        console.log(gl.getError());
-        console.log("got here");
     }
 
     gl.enable(gl.SCISSOR_TEST);
@@ -136,7 +134,6 @@ export function* doRenderTask(options: RenderTaskOptions) {
     //gl.bindTexture
 
     gl.useProgram(options.state.shader.program);
-    console.log(gl.getError());
 
     gl.bindBuffer(gl.ARRAY_BUFFER, options.state.fullscreenQuadBuffer);
 
