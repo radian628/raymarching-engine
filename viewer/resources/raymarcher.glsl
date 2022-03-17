@@ -1,5 +1,7 @@
 #version 300 es
 
+//INSERT_DEFINES_HERE
+
 precision highp float;
 
 in vec2 in_position;
@@ -95,7 +97,7 @@ float PRIMITIVE1(vec3 position2) {
       sphereGridDist, length(p) - 0.69 * sf
     );
   }
-  return max(length(position - vec3(0.0, 0.0, 2.5)) - 2.0, -sphereGridDist);
+  return max(length(position - vec3(0.0, 0.0, 0.0)) - 2.0, -sphereGridDist);
   // float minDist = sdBox(position, vec3(1.0));
   // for (float i = 1.0; i < 4.0; i++) {
   //     float sf = pow(0.33333333333, i);
@@ -115,11 +117,11 @@ float PRIMITIVE1(vec3 position2) {
 }
 
 float PRIMITIVE2(vec3 position) {
-  return -(length(position) - 4.0);
+  return -(length(position) - 10.0);
 }
 
 float PRIMITIVE3(vec3 position) {
-  return length(position - vec3(0.0, 0.0, 2.5)) - 1.1;
+  return length(position - vec3(0.0, 0.0, 0.0)) - 1.75;
 }
 
 float SDF(vec3 position) {
@@ -135,7 +137,7 @@ float SDF(vec3 position) {
 vec3 albedo(vec3 position) {
   float sdf = SDF(position);
   if (sdf == PRIMITIVE1(position)) {
-    return vec3(0.3);
+    return vec3(0.83);
   } else if (sdf == PRIMITIVE2(position)) {
     return vec3(0.0);
   } else if (sdf == PRIMITIVE3(position)) {
@@ -154,7 +156,7 @@ vec3 emission(vec3 position) {
   } else if (sdf == PRIMITIVE2(position)) {
     return 
     vec3(1.0 + rand(), 0.2 + rand(), 0.0 + rand()) * 5.5 *
-    pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(1.0, 1.0, -1.0)))), 32.0);// + 
+    pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(1.0, 1.0, -1.0)))), 9.0) +  vec3(0.4, 0.2, 0.1) * 0.03;// + 
     //vec3(0.9, 0.5, 0.1) * 5.5 *
     //pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(1.0, -1.0, -1.0)))), 16.0) + 
     //vec3(0.7, 0.7, 0.3) * 5.5 *
@@ -167,6 +169,18 @@ vec3 emission(vec3 position) {
 float roughness(vec3 position) {
   return 0.6;
 }
+
+float subsurfOpacity(vec3 position) {
+  
+  float sdf = SDF(position);
+  if (sdf == PRIMITIVE1(position)) {
+    return 100.0;
+  } else {
+    return 9999999999999999.9999;
+  }
+}
+
+
 //SCENE_PARAMS_END
 
 
@@ -218,6 +232,10 @@ vec2 randInCircle() {
   return vec2(cos(theta), sin(theta)) * mag;
 }
 
+vec3 randUnitVec3() {
+  return normalize(vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x));
+}
+
 vec3 getSample() {
     vec2 directionProjectedThroughZEqualsOne = (in_position.xy + vec2(rand(), rand()) / vec2(textureSize(prevFrameColor, 0))) * fovs;
     vec3 directionWithoutRotationOrDOF = vec3(directionProjectedThroughZEqualsOne, 1.0);
@@ -227,11 +245,11 @@ vec3 getSample() {
     vec3 direction = normalize(vecFromPositionToFocalPlane - circleOfConfusionOffset);
     vec3 rayStartPosition = cameraPosition + circleOfConfusionOffset;
     vec3 finalPosition;
-  #define IS_REALTIME_MODE
+  //#define IS_REALTIME_MODE
   #ifdef IS_REALTIME_MODE
     uint stepCount;
     marchRay(rayStartPosition, direction, primaryRaymarchingSteps, finalPosition, stepCount);
-    return vec3(float(stepCount) / float(primaryRaymarchingSteps));
+    return (1.0 - vec3(float(stepCount) / float(primaryRaymarchingSteps))) * albedo(finalPosition) + emission(finalPosition);
   #else
 
     vec3 accumulatedLight = vec3(0.0);
@@ -251,19 +269,29 @@ vec3 getSample() {
       if (volumetricSample < pathLength) {
         //float volumetricPositionFactor = lambda * exp(-lambda * pathLength);
         rayStartPosition = rayStartPosition + direction * volumetricSample;
-        direction = normalize(vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x));
+        direction = randUnitVec3();
         //vec3 randVec = vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x);
         //direction = rotateQuat(direction, quatAngleAxis(0.6, normalize(cross(randVec, direction))));
       } else {
-        accumulatedLight += emission(finalPosition) * accumulatedAlbedo;
-        accumulatedAlbedo *= albedo(finalPosition);
         
+        float subsurfVolumentricSample = -1.0 / subsurfOpacity(finalPosition) * log(1.0 - rand());
         vec3 normal = normalize(gradientNoDiv(finalPosition, 0.0001));
-        vec3 reflectDirection = reflect(direction, normal);
-        direction = normalize(
-          mix(reflectDirection, normalize(hemisphericalSample(normal)), roughness(finalPosition))
-        );
-        rayStartPosition = finalPosition + direction * 0.001;
+        vec3 subsurfScatterDirection = normalize(hemisphericalSample(normal));
+        vec3 subsurfScatterFinalPos = finalPosition + subsurfScatterDirection * subsurfVolumentricSample;
+        accumulatedLight += emission(finalPosition) * accumulatedAlbedo;
+        if (SDF(subsurfScatterFinalPos) > 0.0) {
+          rayStartPosition = finalPosition + subsurfScatterDirection * subsurfVolumentricSample;
+          direction = randUnitVec3();
+        } else {
+          //accumulatedLight += 
+          accumulatedLight += emission(subsurfScatterFinalPos) * accumulatedAlbedo;
+          accumulatedAlbedo *= albedo(finalPosition);
+          vec3 reflectDirection = reflect(direction, normal);
+          direction = normalize(
+            mix(reflectDirection, normalize(hemisphericalSample(normal)), roughness(finalPosition))
+          );
+          rayStartPosition = finalPosition + direction * 0.001;
+        }
       }
       
       //accumulatedAlbedo *= max(1.0 - volumetricChance, 0.0);

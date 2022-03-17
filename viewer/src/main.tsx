@@ -43,9 +43,9 @@ const MainCanvas = () => {
 
     window.dispatchEvent(new Event("resize"));
 
-    let pos: vec3 = [0, 0, 3.97];
+    let pos: vec3 = [0, 0, 3.17];
     let rot: quat = [0,0,0,0];
-    quat.identity(rot);
+    quat.rotateY(quat.identity(rot), rot, Math.PI);
 
     function loop() {
       //console.log(keysDown);
@@ -74,13 +74,16 @@ const MainCanvas = () => {
         vec3.add(movementVec, movementVec, [0, 1, 0]);
       } 
       vec3.transformQuat(movementVec, movementVec, rot);
-      vec3.add(pos, pos, vec3.mul(movementVec, movementVec, [0.01, 0.01, 0.01]));
+      vec3.add(pos, pos, vec3.mul(movementVec, movementVec, [0.05, 0.05, 0.05]));
       let renderTask = raymarch.doRenderTask({
         state: renderState,
         subdivX: 1,
         subdivY: 1,
         iterations: 1,
-        shaderCompileOptions: { change: false },
+        shaderCompileOptions: {
+          change: false, 
+          isRealtimeMode: false, 
+        },
 
         uniforms: {
           camera: {
@@ -88,16 +91,15 @@ const MainCanvas = () => {
             rotation: rot
           },
           fovs: [1.5 * window.innerWidth / window.innerHeight, 1.5],
-          primaryRaymarchingSteps: 32,
-          reflections: 3,
+          primaryRaymarchingSteps: 64,
+          reflections: 16,
           isAdditive: false,
-          blendFactor: (vec3.length(movementVec) == 0 && deltaRotation == 0) ? 0.95 : 0.5,
+          blendFactor: (vec3.length(movementVec) == 0 && deltaRotation == 0) ? 0.97 : 0,
           dof: {
             distance: 0.25,
             amount: 0.01,
           },
-          fogDensity: 0.0,
-          isRealtimeMode: true,
+          fogDensity: 0.4,
         },
       }); 
       let task = renderTask.next();
