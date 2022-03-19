@@ -15,5 +15,7 @@ canvas {
   left: 0px;
   background-color: #000000AA;
   color: white;
-  z-index: 1
+  z-index: 1;
+  font-family: sans-serif;
+  padding-left: 10px;
 }

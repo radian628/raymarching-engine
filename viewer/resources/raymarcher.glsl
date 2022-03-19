@@ -5,7 +5,10 @@
 precision highp float;
 
 in vec2 in_position;
-out vec4 fragColor;
+layout(location=0) out vec4 fragColor;
+layout(location=1) out vec4 normalOut;
+layout(location=2) out vec4 albedoOut;
+layout(location=3) out vec4 positionOut;
 
 //camera params
 uniform vec3 cameraPosition;
@@ -34,6 +37,9 @@ uniform float fogDensity;
 uniform bool isRealtimeMode;
 
 uniform sampler2D prevFrameColor;
+uniform sampler2D prevFrameNormal;
+uniform sampler2D prevFrameAlbedo;
+uniform sampler2D prevFramePosition;
 
 const float PI = 3.14159265;
 
@@ -94,7 +100,7 @@ float PRIMITIVE1(vec3 position2) {
     float sf = pow(0.5, i);
   vec3 p = repeat(position + vec3(0.0), vec3(2.0 * sf));
     sphereGridDist = min(
-      sphereGridDist, length(p) - 0.69 * sf
+      sphereGridDist, /*sdBox(p, vec3(0.667) * sf)*/length(p) - 0.69 * sf
     );
   }
   return max(length(position - vec3(0.0, 0.0, 0.0)) - 2.0, -sphereGridDist);
@@ -121,7 +127,7 @@ float PRIMITIVE2(vec3 position) {
 }
 
 float PRIMITIVE3(vec3 position) {
-  return length(position - vec3(0.0, 0.0, 0.0)) - 1.75;
+  return length(position - vec3(0.0, 0.0, 0.0)) - 1.7;
 }
 
 float SDF(vec3 position) {
@@ -174,7 +180,7 @@ float subsurfOpacity(vec3 position) {
   
   float sdf = SDF(position);
   if (sdf == PRIMITIVE1(position)) {
-    return 100.0;
+    return 20.0;
   } else {
     return 9999999999999999.9999;
   }
@@ -236,6 +242,10 @@ vec3 randUnitVec3() {
   return normalize(vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x));
 }
 
+vec4 eventualAlbedoOut;
+vec4 eventualNormalOut;
+vec4 eventualPositionOut;
+
 vec3 getSample() {
     vec2 directionProjectedThroughZEqualsOne = (in_position.xy + vec2(rand(), rand()) / vec2(textureSize(prevFrameColor, 0))) * fovs;
     vec3 directionWithoutRotationOrDOF = vec3(directionProjectedThroughZEqualsOne, 1.0);
@@ -249,6 +259,9 @@ vec3 getSample() {
   #ifdef IS_REALTIME_MODE
     uint stepCount;
     marchRay(rayStartPosition, direction, primaryRaymarchingSteps, finalPosition, stepCount);
+    eventualAlbedoOut = vec4(albedo(finalPosition), 1.0);
+    eventualNormalOut = vec4(normalize(gradientNoDiv(finalPosition, 0.0001)), 1.0);
+    eventualPositionOut = vec4((finalPosition - rayStartPosition), 1.0);
     return (1.0 - vec3(float(stepCount) / float(primaryRaymarchingSteps))) * albedo(finalPosition) + emission(finalPosition);
   #else
 
@@ -266,6 +279,7 @@ vec3 getSample() {
       
       float volumetricSample = -1.0 / lambda * log(1.0 - rand());
 
+      vec3 normal = normalize(gradientNoDiv(finalPosition, 0.0001));
       if (volumetricSample < pathLength) {
         //float volumetricPositionFactor = lambda * exp(-lambda * pathLength);
         rayStartPosition = rayStartPosition + direction * volumetricSample;
@@ -275,7 +289,6 @@ vec3 getSample() {
       } else {
         
         float subsurfVolumentricSample = -1.0 / subsurfOpacity(finalPosition) * log(1.0 - rand());
-        vec3 normal = normalize(gradientNoDiv(finalPosition, 0.0001));
         vec3 subsurfScatterDirection = normalize(hemisphericalSample(normal));
         vec3 subsurfScatterFinalPos = finalPosition + subsurfScatterDirection * subsurfVolumentricSample;
         accumulatedLight += emission(finalPosition) * accumulatedAlbedo;
@@ -293,7 +306,11 @@ vec3 getSample() {
           rayStartPosition = finalPosition + direction * 0.001;
         }
       }
-      
+      if (i == 0u) {
+        eventualAlbedoOut = vec4(albedo(finalPosition), 1.0);
+        eventualNormalOut = (volumetricSample < pathLength) ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(normal, 1.0);
+        eventualPositionOut = vec4((finalPosition - rayStartPosition), 1.0);
+      }
       //accumulatedAlbedo *= max(1.0 - volumetricChance, 0.0);
   
     }
@@ -315,5 +332,9 @@ void main() {
   } else {
     fragColor = vec4(mix(color, texture(prevFrameColor, texCoord).rgb, blendFactor), 1.0);
   }
+  albedoOut = mix(eventualAlbedoOut, texture(prevFrameAlbedo, texCoord), blendFactor);
+  normalOut = mix(eventualNormalOut, texture(prevFrameNormal, texCoord), blendFactor);
+  positionOut = mix(eventualPositionOut, texture(prevFramePosition, texCoord), blendFactor);
+  //albedoOut = vec4(1.0);
   //fragColor = vec4(1.0, 0.0, 0.0, 1.0);
 }

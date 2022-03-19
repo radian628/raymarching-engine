@@ -1,9 +1,11 @@
 let RAYMARCHER_SRC;
 let VERTEX_SRC;
+let GAMMA_CORRECTION_SRC;
 
 export async function loadShaders() {
   RAYMARCHER_SRC = await (await fetch("../resources/raymarcher.glsl")).text();
   VERTEX_SRC = await (await fetch("../resources/vertex.glsl")).text();
+  GAMMA_CORRECTION_SRC = await (await fetch("../resources/gamma_correction.glsl")).text();
 }
 interface ShaderCompileOptions {
   change: boolean;
@@ -17,14 +19,8 @@ interface RenderStateOptions {
 }
 
 interface RenderState {
-  framebuffer: {
-    prev: WebGLFramebuffer;
-    current: WebGLFramebuffer;
-  };
-  texture: {
-    prev: WebGLTexture;
-    current: WebGLTexture;
-  };
+  previousRenderTarget: RenderTargetState;
+  currentRenderTarget: RenderTargetState;
   fullscreenQuadBuffer: WebGLBuffer;
   width: number;
   height: number;
@@ -34,6 +30,7 @@ interface RenderState {
     vertex: WebGLShader;
     compileOptions: ShaderCompileOptions;
     program: WebGLProgram;
+    gammaCorrection: WebGLProgram;
   };
 }
 
@@ -71,7 +68,6 @@ function setUniforms(
   program: WebGLProgram,
   gl: WebGL2RenderingContext
 ) {
-  //console.log("setUniforms called");
   for (let [uniformName, [uniformType, uniformValue]] of Object.entries(
     uniforms
   )) {
@@ -149,7 +145,6 @@ function setShaderOptions(options: ShaderCompileOptions): string {
 export function* doRenderTask(options: RenderTaskOptions) {
   let gl = options.state.gl;
 
-  gl.viewport(0, 0, options.state.width, options.state.height);
 
   if (
     isShaderUpdateNeeded(
@@ -157,6 +152,7 @@ export function* doRenderTask(options: RenderTaskOptions) {
       options.shaderCompileOptions
     )
   ) {
+    console.log("SHADER COMPILED.");
     let shader = options.state.shader;
     gl.deleteShader(shader.fragment);
     shader.fragment = gl.createShader(gl.FRAGMENT_SHADER);
@@ -164,40 +160,17 @@ export function* doRenderTask(options: RenderTaskOptions) {
     gl.deleteProgram(shader.program);
     shader.program = gl.createProgram();
     makeProgram(shader.program, shader.vertex, shader.fragment, gl);
+    options.state.shader.compileOptions = options.shaderCompileOptions;
   }
 
   gl.enable(gl.SCISSOR_TEST);
 
   //gl.bindTexture
 
-  gl.useProgram(options.state.shader.program);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, options.state.fullscreenQuadBuffer);
 
-  gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, options.state.texture.prev);
-
-  setUniforms(
-    {
-      cameraPosition: ["f", options.uniforms.camera.position],
-      cameraRotation: ["f", options.uniforms.camera.rotation],
-      fovs: ["f", options.uniforms.fovs],
-      primaryRaymarchingSteps: ["ui", options.uniforms.primaryRaymarchingSteps],
-      reflections: ["ui", options.uniforms.reflections],
-      randNoise: ["f", [Math.random(), Math.random()]],
-      isAdditive: ["i", options.uniforms.isAdditive ? 1 : 0],
-      blendFactor: ["f", options.uniforms.blendFactor],
-      focalPlaneDistance: ["f", options.uniforms.dof.distance],
-      circleOfConfusionRadius: ["f", options.uniforms.dof.amount],
-      prevFrameColor: ["i", 0],
-      fogDensity: ["f", options.uniforms.fogDensity]
-    },
-    options.state.shader.program,
-    gl
-  );
 
   for (let y = 0; y < options.subdivY; y++) {
     for (let x = 0; x < options.subdivX; x++) {
@@ -208,54 +181,105 @@ export function* doRenderTask(options: RenderTaskOptions) {
         options.state.height / options.subdivY
       );
       for (let i = 0; i < options.iterations; i++) {
+
+        gl.useProgram(options.state.shader.program);
+        gl.bindFramebuffer(
+          gl.DRAW_FRAMEBUFFER,
+          options.state.currentRenderTarget.framebuffer
+        );
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3]);
+        
+        
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.previousRenderTarget.colorTex);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.previousRenderTarget.normalTex);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.previousRenderTarget.albedoTex);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.previousRenderTarget.positionTex);
+        
         setUniforms(
           {
+            cameraPosition: ["f", options.uniforms.camera.position],
+            cameraRotation: ["f", options.uniforms.camera.rotation],
+            fovs: ["f", options.uniforms.fovs],
+            primaryRaymarchingSteps: ["ui", options.uniforms.primaryRaymarchingSteps],
+            reflections: ["ui", options.uniforms.reflections],
             randNoise: ["f", [Math.random(), Math.random()]],
+            isAdditive: ["i", options.uniforms.isAdditive ? 1 : 0],
+            blendFactor: ["f", options.uniforms.blendFactor],
+            focalPlaneDistance: ["f", options.uniforms.dof.distance],
+            circleOfConfusionRadius: ["f", options.uniforms.dof.amount],
+            prevFrameColor: ["i", 0],
+            prevFrameNormal: ["i", 1],
+            prevFrameAlbedo: ["i", 2],
+            prevFramePosition: ["i", 3],
+            fogDensity: ["f", options.uniforms.fogDensity]
           },
           options.state.shader.program,
           gl
         );
-        gl.bindFramebuffer(
-          gl.DRAW_FRAMEBUFFER,
-          options.state.framebuffer.current
-        );
+        
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-        gl.bindFramebuffer(
-          gl.READ_FRAMEBUFFER,
-          options.state.framebuffer.current
-        );
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, options.state.framebuffer.prev);
-        gl.blitFramebuffer(
-          0,
-          0,
-          options.state.width,
-          options.state.height,
-          0,
-          0,
-          options.state.width,
-          options.state.height,
-          gl.COLOR_BUFFER_BIT,
-          gl.NEAREST
-        );
+
 
         gl.bindFramebuffer(
           gl.READ_FRAMEBUFFER,
-          options.state.framebuffer.current
+          options.state.currentRenderTarget.framebuffer
         );
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, options.state.previousRenderTarget.framebuffer);
+        for (let i = 0; i < 4; i++) {
+          gl.readBuffer(gl.COLOR_ATTACHMENT0 + i);
+          gl.drawBuffers([...new Array(i).fill(null), gl.COLOR_ATTACHMENT0 + i]); 
+          gl.blitFramebuffer(
+            0,
+            0,
+            options.state.width,
+            options.state.height,
+            0,
+            0,
+            options.state.width,
+            options.state.height,
+            gl.COLOR_BUFFER_BIT,
+            gl.NEAREST
+          );
+        }
+
+        gl.bindFramebuffer(
+          gl.READ_FRAMEBUFFER,
+          options.state.currentRenderTarget.framebuffer
+        );
+
+
+        
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.currentRenderTarget.colorTex);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.currentRenderTarget.normalTex);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.currentRenderTarget.albedoTex);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.currentRenderTarget.positionTex);
+        gl.useProgram(options.state.shader.gammaCorrection);
+        setUniforms(
+          {
+            inputImage: ["i", 0],
+            inputNormal: ["i", 1],
+            inputAlbedo: ["i", 2],
+            inputPosition: ["i", 3],
+            gamma: ["f", 1/2.2]
+          },
+          options.state.shader.gammaCorrection,
+          gl
+        );
+
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-        gl.blitFramebuffer(
-          0,
-          0,
-          options.state.width,
-          options.state.height,
-          0,
-          0,
-          options.state.width,
-          options.state.height,
-          gl.COLOR_BUFFER_BIT,
-          gl.NEAREST
-        );
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
         yield;
       }
     }
@@ -268,6 +292,56 @@ function setNearestFilter(tex: WebGLTexture, gl: WebGL2RenderingContext) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 }
 
+
+
+interface RenderTargetState {
+  framebuffer: WebGLFramebuffer,
+  colorTex: WebGLTexture,
+  normalTex: WebGLTexture,
+  albedoTex: WebGLTexture,
+  positionTex: WebGLTexture
+};
+
+function setupRenderTargetFramebuffer(gl: WebGL2RenderingContext, width, height): RenderTargetState {
+  let framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+
+  let colorTex = gl.createTexture();
+  let normalTex = gl.createTexture();
+  let albedoTex = gl.createTexture();
+  let positionTex = gl.createTexture();
+  
+  [colorTex, normalTex, albedoTex, positionTex].forEach((tex, i) => {
+    setNearestFilter(tex, gl);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA16F,
+      width,
+      height,
+      0,
+      gl.RGBA,
+      gl.HALF_FLOAT,
+      null
+    );
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0 + i,
+      gl.TEXTURE_2D,
+      tex,
+      0
+    );
+  });
+
+  return {
+    framebuffer, colorTex, normalTex, albedoTex, positionTex
+  };
+}
+
+
+
+
+
 export function createRenderState(options: RenderStateOptions): RenderState {
   let gl = options.canvas.getContext("webgl2", {
     antialias: false,
@@ -276,6 +350,8 @@ export function createRenderState(options: RenderStateOptions): RenderState {
   gl.getExtension("EXT_color_buffer_float");
   gl.getExtension("OES_texture_float_linear");
 
+  gl.viewport(0, 0, options.width, options.height);
+
   let fullscreenQuadBuffer = gl.createBuffer();
   let fullscreenQuadBufferData = new Float32Array([
     -1, 1, 1, 1, 1, -1, -1, 1, 1, -1, -1, -1,
@@ -283,74 +359,31 @@ export function createRenderState(options: RenderStateOptions): RenderState {
   gl.bindBuffer(gl.ARRAY_BUFFER, fullscreenQuadBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, fullscreenQuadBufferData, gl.STATIC_DRAW);
 
-  let prevFramebuffer = gl.createFramebuffer();
-  let currentFramebuffer = gl.createFramebuffer();
-
-  let prevTexture = gl.createTexture();
-  setNearestFilter(prevTexture, gl);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA16F,
-    options.width,
-    options.height,
-    0,
-    gl.RGBA,
-    gl.HALF_FLOAT,
-    null
-  );
-  gl.bindFramebuffer(gl.FRAMEBUFFER, prevFramebuffer);
-  gl.framebufferTexture2D(
-    gl.FRAMEBUFFER,
-    gl.COLOR_ATTACHMENT0,
-    gl.TEXTURE_2D,
-    prevTexture,
-    0
-  );
-
-  let currentTexture = gl.createTexture();
-  setNearestFilter(currentTexture, gl);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA16F,
-    options.width,
-    options.height,
-    0,
-    gl.RGBA,
-    gl.HALF_FLOAT,
-    null
-  );
-  gl.bindFramebuffer(gl.FRAMEBUFFER, currentFramebuffer);
-  gl.framebufferTexture2D(
-    gl.FRAMEBUFFER,
-    gl.COLOR_ATTACHMENT0,
-    gl.TEXTURE_2D,
-    currentTexture,
-    0
-  );
+  let currentRTState = setupRenderTargetFramebuffer(gl, options.width, options.height);
+  let prevRTState = setupRenderTargetFramebuffer(gl, options.width, options.height);
 
   let vertexShader = gl.createShader(gl.VERTEX_SHADER);
   let fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
 
+  let gammaCorrectionShader = gl.createShader(gl.FRAGMENT_SHADER);
+
   makeShader(vertexShader, VERTEX_SRC, gl);
+  makeShader(gammaCorrectionShader, GAMMA_CORRECTION_SRC, gl);
+
+  let gammaCorrectionProgram = gl.createProgram();
+  makeProgram(gammaCorrectionProgram, vertexShader, gammaCorrectionShader, gl);
 
   let renderState: RenderState = {
     gl,
     fullscreenQuadBuffer,
-    framebuffer: {
-      prev: prevFramebuffer,
-      current: currentFramebuffer,
-    },
-    texture: {
-      prev: prevTexture,
-      current: currentTexture,
-    },
+    previousRenderTarget: prevRTState,
+    currentRenderTarget: currentRTState,
     shader: {
       vertex: vertexShader,
       fragment: fragmentShader,
       compileOptions: { change: true, isRealtimeMode: false },
       program: gl.createProgram(),
+      gammaCorrection: gammaCorrectionProgram
     },
     width: options.width,
     height: options.height,
