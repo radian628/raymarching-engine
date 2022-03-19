@@ -19,3 +19,34 @@ canvas {
   font-family: sans-serif;
   padding-left: 10px;
 }
+
+.setting {
+  display: flex;
+  justify-content: space-between;
+}
+
+.setting label {
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.setting input {
+  padding: 0;
+  margin: 0;
+  margin-right: 10px;
+  display: block;
+  width: 100%;
+}
+
+.setting input {
+  background: #000000AA;
+  color: white;
+  border-radius: 5px;
+  border: 1px solid #FFFFFF33;
+  margin-left: 10px;
+  padding-left: 3px;
+}
+/* input[type=range]:focus::-webkit-slider-runnable-track {
+  background: #367ebd;
+} */

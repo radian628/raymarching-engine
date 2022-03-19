@@ -13,11 +13,26 @@ interface NumberInputOptions<T> {
   min: number;
   max: number;
   step: number;
+  sensitivity: number;
   state: [object, Function]
   setting: string;
 }
 
+let isMouseDown = false;
+
+document.addEventListener("mousedown", e => {
+  isMouseDown = true;
+});
+document.addEventListener("mouseup", e => {
+  isMouseDown = false;
+});
+
 const NumberInput = <T, >(props: NumberInputOptions<T>) => {
+
+  const [isFocusedOnMe, setIsFocusedOnMe] = React.useState(false);
+  const [accumDistance, setAccumDistance] = React.useState(0);
+  const [lastSettingValue, setLastSettingValue] = React.useState(props.state[0][props.setting]);
+
   let getNum = e => {
     let value = Number(e.currentTarget.value);  
     props.state[1]({
@@ -26,20 +41,61 @@ const NumberInput = <T, >(props: NumberInputOptions<T>) => {
     });
   }
 
+  let screenSpaceToSliderSpace = x => {
+    return Math.round((x) / props.step) * props.step;
+  }
+
+  let shouldAddAccumulatedDistanceAgain = true;
+
   return (
-    <React.Fragment>
+    <div className="setting"
+      onMouseDown={(e => {
+        setLastSettingValue(props.state[0][props.setting]);
+      })}
+      onMouseUp={e => {
+        document.exitPointerLock();
+        if (!isFocusedOnMe) {
+          e.target.focus();
+        }
+      }}
+      onMouseMove={e => {
+        if (isMouseDown) {
+          e.currentTarget.requestPointerLock();
+          setIsFocusedOnMe(true);
+        }
+        let value = props.state[0][props.setting];  
+        if (isMouseDown && document.pointerLockElement == e.currentTarget) {
+          e.preventDefault();
+          console.log(accumDistance, e.movementX);
+          setAccumDistance(accumDistance + ((accumDistance == 0) ? Math.sign(e.movementX) : e.movementX));
+          props.state[1]({
+            ...props.state[0],
+            [props.setting]: lastSettingValue + screenSpaceToSliderSpace(accumDistance * props.sensitivity)
+          });
+        } else {
+          if (isFocusedOnMe && shouldAddAccumulatedDistanceAgain) {
+            setAccumDistance(0);
+            setIsFocusedOnMe(false);
+            setLastSettingValue(props.state[0][props.setting]);
+            shouldAddAccumulatedDistanceAgain = false;
+          }
+        }
+      }}
+    >
       <label>{props.label}</label>
-      <input 
-        value={props.state[0][props.setting]}
+      <input disabled={false}
+        value={Math.floor((lastSettingValue + screenSpaceToSliderSpace(accumDistance * props.sensitivity)) * 1000) / 1000}
         type={props.isRange ? "range" : "number"} 
         min={props.min} 
         max={props.max} 
         step={props.step}
         onChange={getNum}
+        onInput={e => {
+          setLastSettingValue(Number(e.currentTarget.value));
+        }}
       >
       </input>
-      <br></br>
-    </React.Fragment>
+    </div>
   )
 }
 
@@ -51,7 +107,9 @@ const RaymarcherGUI = (props) => {
     focalPlaneDistance: -0.5,
     circleOfConfusionSize: -3,
     isRealtimeMode: true,
-    blendFactor: 0.95
+    blendFactor: 0.95,
+    cameraSpeed: -2,
+    isDoingHighQualityRender: false
   });
 
   props.guiOptions.current = Object.assign({}, renderGUIOptions);
@@ -83,13 +141,15 @@ const RaymarcherGUI = (props) => {
   return (
     <div id="gui-container">
       <div id="gui-settings">
-        <button>Do High Quality Render</button>
+        <button onClick={() => setRenderGUIOptions({...renderGUIOptions, isDoingHighQualityRender: !renderGUIOptions.isDoingHighQualityRender })}>Do High Quality Render</button>
         <h2>High Quality Render Settings</h2>
+        <h2>Viewer Settings</h2>
+        <NumberInput state={state} label="Camera Speed" isRange={false} min={-6} max={1} step={0.0001} sensitivity={0.0008} setting="cameraSpeed"></NumberInput>
         <h2>Render Settings</h2>
-        <NumberInput state={state} label="Raymarching Steps" isRange={true} min={0} max={128} step={1} setting="primaryRaymarchingSteps"></NumberInput>
-        <NumberInput state={state} label="Reflections" isRange={true} min={0} max={15} step={1} setting="reflections"></NumberInput>
-        <NumberInput state={state} label="DOF Focal Plane Distance" isRange={true} min={-4} max={4} step={0.00001} setting="focalPlaneDistance"></NumberInput>
-        <NumberInput state={state} label="Circle of Confusion Size" isRange={true} min={-4} max={1} step={0.00001} setting="circleOfConfusionSize"></NumberInput>
+        <NumberInput state={state} label="Raymarching Steps" isRange={false} min={0} max={128} step={1} sensitivity={0.008} setting="primaryRaymarchingSteps"></NumberInput>
+        <NumberInput state={state} label="Reflections" isRange={false} min={0} max={15} step={1} sensitivity={0.0008} setting="reflections"></NumberInput>
+        <NumberInput state={state} label="DOF Focal Plane Distance" isRange={false} min={-4} max={4} step={0.0001} sensitivity={0.0008} setting="focalPlaneDistance"></NumberInput>
+        <NumberInput state={state} label="Circle of Confusion Size" isRange={false} min={-4} max={1} step={0.0001} sensitivity={0.0008} setting="circleOfConfusionSize"></NumberInput>
         <label>Realtime Mode</label>
         <input type="checkbox" checked={renderGUIOptions.isRealtimeMode} onChange={getBool("isRealtimeMode")}></input>
         <br></br>
@@ -141,66 +201,111 @@ const MainCanvas = (props) => {
     let rot: quat = [0,0,0,0];
     quat.rotateY(quat.identity(rot), rot, Math.PI);
 
+    let highQualityRenderTask;
+    let isHighQualityRenderTaskDone = false;
+
     function loop() {
       const isControllingViewer = document.pointerLockElement === canvasDomNode;
       const guiOpts = props.guiOptions.current;
       if (guiOpts) {
-        let movementVec: vec3 = [0, 0, 0];
-        if (isControllingViewer) {
-          quat.rotateY(rot, rot, mouseMoveX / 300);
-          quat.rotateX(rot, rot, mouseMoveY / 300);
-          if (keysDown.w) {
-            vec3.add(movementVec, movementVec, [0, 0, 1]);
-          } 
-          if (keysDown.a) {
-            vec3.add(movementVec, movementVec, [-1, 0, 0]);
-          } 
-          if (keysDown.s) {
-            vec3.add(movementVec, movementVec, [0, 0, -1]);
-          } 
-          if (keysDown.d) {
-            vec3.add(movementVec, movementVec, [1, 0, 0]);
-          } 
-          if (keysDown.shift) {
-            vec3.add(movementVec, movementVec, [0, -1, 0]);
-          } 
-          if (keysDown[" "]) {
-            vec3.add(movementVec, movementVec, [0, 1, 0]);
-          } 
-          vec3.transformQuat(movementVec, movementVec, rot);
-          vec3.add(pos, pos, vec3.mul(movementVec, movementVec, [0.05, 0.05, 0.05]));
-        }
-        let deltaRotation = isControllingViewer ? Math.hypot(mouseMoveX, mouseMoveY) : 0;
-        mouseMoveX = 0;
-        mouseMoveY = 0;
-        let renderTask = raymarch.doRenderTask({
-          state: renderState,
-          subdivX: 1,
-          subdivY: 1,
-          iterations: 1,
-          shaderCompileOptions: {
-            change: false, 
-            isRealtimeMode: guiOpts.isRealtimeMode, 
-          },
+        if (guiOpts.isDoingHighQualityRender) {
+          if (!highQualityRenderTask) {
+            window.dispatchEvent(new Event("resize"));
+            //raymarch.clear(renderState);
+            isHighQualityRenderTaskDone = false;
+            highQualityRenderTask = raymarch.doRenderTask({
+              state: renderState,
+              subdivX: 4,
+              subdivY: 4,
+              iterations: 512,
+              shaderCompileOptions: {
+                change: false, 
+                isRealtimeMode: false, 
+              },
+  
+              uniforms: {
+                camera: {
+                  position: pos,
+                  rotation: rot
+                },
+                fovs: [1.5 * window.innerWidth / window.innerHeight, 1.5],
+                primaryRaymarchingSteps: guiOpts.primaryRaymarchingSteps,
+                reflections: guiOpts.reflections,
+                isAdditive: true,
+                blendFactor: 1 / 512,
+                dof: {
+                  distance: Math.pow(10, guiOpts.focalPlaneDistance),
+                  amount: Math.pow(10, guiOpts.circleOfConfusionSize),
+                },
+                fogDensity: 0.4,
+              }
+            }); 
+          }
 
-          uniforms: {
-            camera: {
-              position: pos,
-              rotation: rot
+          if (!isHighQualityRenderTaskDone) {
+            let taskProgress = highQualityRenderTask.next();
+            isHighQualityRenderTaskDone = taskProgress.done;
+          }
+        } else { 
+          highQualityRenderTask = undefined;
+          let movementVec: vec3 = [0, 0, 0];
+          if (isControllingViewer) {
+            quat.rotateY(rot, rot, mouseMoveX / 300);
+            quat.rotateX(rot, rot, mouseMoveY / 300);
+            if (keysDown.w) {
+              vec3.add(movementVec, movementVec, [0, 0, 1]);
+            } 
+            if (keysDown.a) {
+              vec3.add(movementVec, movementVec, [-1, 0, 0]);
+            } 
+            if (keysDown.s) {
+              vec3.add(movementVec, movementVec, [0, 0, -1]);
+            } 
+            if (keysDown.d) {
+              vec3.add(movementVec, movementVec, [1, 0, 0]);
+            } 
+            if (keysDown.shift) {
+              vec3.add(movementVec, movementVec, [0, -1, 0]);
+            } 
+            if (keysDown[" "]) {
+              vec3.add(movementVec, movementVec, [0, 1, 0]);
+            } 
+            let speed = Math.pow(10, guiOpts.cameraSpeed);
+            vec3.transformQuat(movementVec, movementVec, rot);
+            vec3.add(pos, pos, vec3.mul(movementVec, movementVec, [speed, speed, speed]));
+          }
+          let deltaRotation = isControllingViewer ? Math.hypot(mouseMoveX, mouseMoveY) : 0;
+          mouseMoveX = 0;
+          mouseMoveY = 0;
+          let renderTask = raymarch.doRenderTask({
+            state: renderState,
+            subdivX: 1,
+            subdivY: 1,
+            iterations: 1,
+            shaderCompileOptions: {
+              change: false, 
+              isRealtimeMode: guiOpts.isRealtimeMode, 
             },
-            fovs: [1.5 * window.innerWidth / window.innerHeight, 1.5],
-            primaryRaymarchingSteps: guiOpts.primaryRaymarchingSteps,
-            reflections: guiOpts.reflections,
-            isAdditive: false,
-            blendFactor: (vec3.length(movementVec) == 0 && deltaRotation == 0) ? guiOpts.blendFactor : 0,
-            dof: {
-              distance: Math.pow(10, guiOpts.focalPlaneDistance),
-              amount: Math.pow(10, guiOpts.circleOfConfusionSize),
+
+            uniforms: {
+              camera: {
+                position: pos,
+                rotation: rot
+              },
+              fovs: [1.5 * window.innerWidth / window.innerHeight, 1.5],
+              primaryRaymarchingSteps: guiOpts.primaryRaymarchingSteps,
+              reflections: guiOpts.reflections,
+              isAdditive: false,
+              blendFactor: (vec3.length(movementVec) == 0 && deltaRotation == 0) ? guiOpts.blendFactor : 0,
+              dof: {
+                distance: Math.pow(10, guiOpts.focalPlaneDistance),
+                amount: Math.pow(10, guiOpts.circleOfConfusionSize),
+              },
+              fogDensity: 0.4,
             },
-            fogDensity: 0.4,
-          },
-        }); 
-        let task = renderTask.next();
+          }); 
+          let task = renderTask.next();
+        }     
       }
 
       requestAnimationFrame(loop);
@@ -222,6 +327,8 @@ interface RenderTaskGUIOptions {
   circleOfConfusionSize: number;
   isRealtimeMode: boolean;
   blendFactor: number;
+  cameraSpeed: number;
+  isDoingHighQualityRender: boolean;
 }
 
 const Raymarcher = () => {
@@ -236,50 +343,6 @@ const Raymarcher = () => {
 async function main() {
   await raymarch.loadShaders();
   ReactDOM.render(<Raymarcher></Raymarcher>, document.getElementById("app-container"));
-  //let renderState = ;
-
-  // let z = 0;
-  // let currentRotation = 0;
-
-  // function loop() {
-  //   z -= 0.001;
-  //   currentRotation += 0.005;
-
-  //   let renderTask = raymarch.doRenderTask({
-  //     state: renderState,
-  //     subdivX: 1,
-  //     subdivY: 1,
-  //     iterations: 1,
-  //     shaderCompileOptions: { change: false },
-
-  //     uniforms: {
-  //       camera: {
-  //         position: vec3.add([0, 0, 0], [0, 0, 3.97], [z, z, z]),
-  //         rotation: quat.rotateY(
-  //           quat.identity([0, 0, 0, 0]),
-  //           quat.identity([0, 0, 0, 0]),
-  //           currentRotation
-  //         ),
-  //       },
-  //       fovs: [(1.5 * 16) / 9, 1.5],
-  //       primaryRaymarchingSteps: 64,
-  //       reflections: 3,
-  //       isAdditive: false,
-  //       blendFactor: 0.5,
-  //       dof: {
-  //         distance: 0.25,
-  //         amount: 0.0,
-  //       },
-  //       fogDensity: 0.0,
-  //       isRealtimeMode: true,
-  //     },
-  //   });
-
-  //   let task = renderTask.next();
-
-  //   requestAnimationFrame(loop);
-  // }
-  // loop();
 }
 
 

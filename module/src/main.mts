@@ -1,3 +1,5 @@
+import { getLeadingCommentRanges } from "../node_modules/typescript/lib/typescript";
+
 let RAYMARCHER_SRC;
 let VERTEX_SRC;
 let GAMMA_CORRECTION_SRC;
@@ -142,6 +144,23 @@ function setShaderOptions(options: ShaderCompileOptions): string {
   return shaderSource;
 }
 
+
+export function clear(state: RenderState) {
+  let gl = state.gl;
+  gl.colorMask(true, true, true, true);
+  gl.clearColor(0, 0, 0, 1);
+  //gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, state.currentRenderTarget.framebuffer);
+  //gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 1]);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, state.previousRenderTarget.framebuffer);
+  //gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 1]);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+}
+
+
 export function* doRenderTask(options: RenderTaskOptions) {
   let gl = options.state.gl;
 
@@ -174,13 +193,13 @@ export function* doRenderTask(options: RenderTaskOptions) {
 
   for (let y = 0; y < options.subdivY; y++) {
     for (let x = 0; x < options.subdivX; x++) {
-      gl.scissor(
-        (options.state.width * x) / options.subdivX,
-        (options.state.height * y) / options.subdivY,
-        options.state.width / options.subdivX,
-        options.state.height / options.subdivY
-      );
       for (let i = 0; i < options.iterations; i++) {
+        gl.scissor(
+          (options.state.width * x) / options.subdivX,
+          (options.state.height * y) / options.subdivY,
+          options.state.width / options.subdivX,
+          options.state.height / options.subdivY
+        );
 
         gl.useProgram(options.state.shader.program);
         gl.bindFramebuffer(
@@ -226,7 +245,11 @@ export function* doRenderTask(options: RenderTaskOptions) {
       
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-
+        gl.scissor(
+          0, 0,
+          options.state.width,
+          options.state.height
+        );
 
         gl.bindFramebuffer(
           gl.READ_FRAMEBUFFER,

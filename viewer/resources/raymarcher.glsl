@@ -100,7 +100,7 @@ float PRIMITIVE1(vec3 position2) {
     float sf = pow(0.5, i);
   vec3 p = repeat(position + vec3(0.0), vec3(2.0 * sf));
     sphereGridDist = min(
-      sphereGridDist, /*sdBox(p, vec3(0.667) * sf)*/length(p) - 0.69 * sf
+      sphereGridDist, /*sdBox(p, vec3(0.667) * sf)*/length(p) - 0.79 * sf
     );
   }
   return max(length(position - vec3(0.0, 0.0, 0.0)) - 2.0, -sphereGridDist);
@@ -180,7 +180,7 @@ float subsurfOpacity(vec3 position) {
   
   float sdf = SDF(position);
   if (sdf == PRIMITIVE1(position)) {
-    return 20.0;
+    return 200.0;
   } else {
     return 9999999999999999.9999;
   }
