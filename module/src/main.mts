@@ -370,8 +370,8 @@ export function createRenderState(options: RenderStateOptions): RenderState {
     antialias: false,
     preserveDrawingBuffer: true,
   });
-  gl.getExtension("EXT_color_buffer_float");
-  gl.getExtension("OES_texture_float_linear");
+  if (!gl.getExtension("EXT_color_buffer_float")) alert("Your computer does not support floating point color buffers. The program may not work as expected.");
+  //if (!gl.getExtension("OES_texture_float_linear")) alert("");
 
   gl.viewport(0, 0, options.width, options.height);
 
