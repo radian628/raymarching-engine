@@ -97,7 +97,7 @@ float PRIMITIVE1(vec3 position2) {
   vec3 position = position2;//repeat(position2, vec3(15.0));
   float sphereGridDist = 99999.0;
   for (float i = 0.0; i < 14.0; i++) {
-    float sf = pow(0.5, i);
+    float sf = pow(0.3333333333, i);
   vec3 p = repeat(position + vec3(0.0), vec3(2.0 * sf));
     sphereGridDist = min(
       sphereGridDist, /*sdBox(p, vec3(0.667) * sf)*/length(p) - 0.79 * sf
@@ -308,8 +308,8 @@ vec3 getSample() {
       }
       if (i == 0u) {
         eventualAlbedoOut = vec4(albedo(finalPosition), 1.0);
-        eventualNormalOut = (volumetricSample < pathLength) ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(normal, 1.0);
-        eventualPositionOut = vec4((finalPosition - rayStartPosition), 1.0);
+        eventualNormalOut = (volumetricSample < pathLength) ? texture(prevFrameNormal, in_position.xy * 0.5 + 0.5) : vec4(normal, 1.0);
+        eventualPositionOut = (volumetricSample < pathLength) ? texture(prevFramePosition, in_position.xy * 0.5 + 0.5) :vec4((finalPosition - rayStartPosition), 1.0);
       }
       //accumulatedAlbedo *= max(1.0 - volumetricChance, 0.0);
   

@@ -146,18 +146,68 @@ function setShaderOptions(options: ShaderCompileOptions): string {
 
 
 export function clear(state: RenderState) {
+  console.log("got here, running clear");
   let gl = state.gl;
+  gl.scissor(0, 0, state.width, state.height);
+  gl.disable(gl.SCISSOR_TEST);
   gl.colorMask(true, true, true, true);
   gl.clearColor(0, 0, 0, 1);
-  //gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-
+  
   gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, state.currentRenderTarget.framebuffer);
   //gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 1]);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
+  // gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, state.previousRenderTarget.framebuffer);
+  // //gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 1]);
+  // gl.clear(gl.COLOR_BUFFER_BIT);
+  // console.log(gl.getError());
+
+
+  // gl.bindFramebuffer(
+  //   gl.READ_FRAMEBUFFER,
+  //   state.currentRenderTarget.framebuffer
+  // );
   gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, state.previousRenderTarget.framebuffer);
-  //gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 1]);
-  gl.clear(gl.COLOR_BUFFER_BIT);
+  for (let i = 0; i < 4; i++) {
+    //gl.readBuffer(gl.COLOR_ATTACHMENT0 + i);
+    gl.drawBuffers([...new Array(i).fill(null), gl.COLOR_ATTACHMENT0 + i]); 
+    // gl.blitFramebuffer(
+    //   0,
+    //   0,
+    //   state.width,
+    //   state.height,
+    //   0,
+    //   0,
+    //   state.width,
+    //   state.height,
+    //   gl.COLOR_BUFFER_BIT,
+    //   gl.NEAREST
+    // );
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  gl.enable(gl.SCISSOR_TEST);
+}
+
+
+export function present(state: RenderState) {
+  let gl = state.gl;
+  
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, state.previousRenderTarget.framebuffer);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+
+  gl.blitFramebuffer(
+    0,
+    0,
+    state.width,
+    state.height,
+    0,
+    0,
+    state.width,
+    state.height,
+    gl.COLOR_BUFFER_BIT,
+    gl.NEAREST
+  );
 }
 
 
@@ -299,6 +349,11 @@ export function* doRenderTask(options: RenderTaskOptions) {
           },
           options.state.shader.gammaCorrection,
           gl
+        );
+
+        gl.bindFramebuffer(
+          gl.READ_FRAMEBUFFER,
+          options.state.currentRenderTarget.framebuffer
         );
 
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);

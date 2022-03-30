@@ -4,7 +4,8 @@
         "module": "es2022",
         "target": "ES2017",
         "jsx": "react",
-        "moduleResolution": "node"
+        "moduleResolution": "node",
+        "allowSyntheticDefaultImports": true
     },
     "include": [
         "src/**/*"

@@ -25,8 +25,14 @@ canvas {
   justify-content: space-between;
 }
 
+h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.3rem;
+  width: 90%;
+}
+
 .setting label {
-  font-size: 12px;
+  font-size: 0.8rem;
   white-space: nowrap;
   z-index: 2;
 }
@@ -36,10 +42,7 @@ canvas {
   margin: 0;
   margin-right: 10px;
   display: block;
-  width: 100%;
-}
-
-.setting input {
+  width: 50%;
   background: #000000AA;
   color: white;
   border-radius: 5px;
@@ -47,6 +50,7 @@ canvas {
   margin-left: 10px;
   padding-left: 3px;
 }
+
 /* input[type=range]:focus::-webkit-slider-runnable-track {
   background: #367ebd;
 } */

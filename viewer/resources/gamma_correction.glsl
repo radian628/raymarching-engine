@@ -44,7 +44,7 @@ void main() {
   normalVariances /= 225.0;
   positionVariances /= 225.0 * length(positionAverages)* length(positionAverages);
 
-  float sigma = max(0.25, 0.01 / (0.00001 + length(normalVariances)));
+  float sigma = max(0.25, 0.03 / (0.00001 + length(normalVariances)));
 
   vec3 avgRGB = vec3(0.0);
   float normalDistAccumulation = 0.0;
@@ -62,7 +62,7 @@ void main() {
   
   //fragColor = vec4(vec3(sigma))
 
-  fragColor = vec4(avgRGB / normalDistAccumulation, 1.0);
+  fragColor = vec4(pow(avgRGB / normalDistAccumulation, vec3(gamma)), 1.0);
   
   // if (isinf(avgRGB.r) || isinf(avgRGB.g) || isinf(avgRGB.b)) {
   //   fragColor = vec4(1.0, 0.0, 0.0, 1.0);
