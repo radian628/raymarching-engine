@@ -284,7 +284,11 @@ export function* doRenderTask(options: RenderTaskOptions) {
             prevFrameNormal: ["i", 1],
             prevFrameAlbedo: ["i", 2],
             prevFramePosition: ["i", 3],
-            fogDensity: ["f", options.uniforms.fogDensity]
+            fogDensity: ["f", options.uniforms.fogDensity],
+            pointLightPositions: ["f", [3, 3, 3]],
+            pointLightColors: ["f", [5, 5, 5]],
+            pointLightShadeAmount: ["f", 0],
+            pointLightRaymarchingSteps: ["ui", 64]
           },
           options.state.shader.program,
           gl

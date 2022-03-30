@@ -41,6 +41,13 @@ uniform sampler2D prevFrameNormal;
 uniform sampler2D prevFrameAlbedo;
 uniform sampler2D prevFramePosition;
 
+#define POINT_LIGHT_COUNT 1u
+//point light(s)
+uniform vec3 pointLightPositions[POINT_LIGHT_COUNT];
+uniform vec3 pointLightColors[POINT_LIGHT_COUNT];
+uniform float pointLightShadeAmount[POINT_LIGHT_COUNT];
+uniform uint pointLightRaymarchingSteps;
+
 const float PI = 3.14159265;
 
 
@@ -161,14 +168,14 @@ vec3 emission(vec3 position) {
     return vec3(0.0);
   } else if (sdf == PRIMITIVE2(position)) {
     return 
-    vec3(1.0 + rand(), 0.2 + rand(), 0.0 + rand()) * 5.5 *
+    vec3(1.0 + rand(), 0.2 + rand(), 0.0 + rand()) * 5.5 * 0.01 *
     pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(1.0, 1.0, -1.0)))), 9.0) +  vec3(0.4, 0.2, 0.1) * 0.03;// + 
     //vec3(0.9, 0.5, 0.1) * 5.5 *
     //pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(1.0, -1.0, -1.0)))), 16.0) + 
     //vec3(0.7, 0.7, 0.3) * 5.5 *
     //pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(-1.0, 1.0, -1.0)))), 16.0);
   } else if (sdf == PRIMITIVE3(position)) {
-    return vec3(0.3, 0.4, 0.8) * 6.0;
+    return 0.01 *vec3(0.3, 0.4, 0.8) * 6.0;
   }
 }
 
@@ -313,6 +320,16 @@ vec3 getSample() {
       }
       //accumulatedAlbedo *= max(1.0 - volumetricChance, 0.0);
   
+      for (uint pointLightIndex = 0u; pointLightIndex < POINT_LIGHT_COUNT; pointLightIndex++) {
+        vec3 pointLightFinalPosition;
+        marchRay(rayStartPosition, normalize(pointLightPositions[pointLightIndex] - rayStartPosition), pointLightRaymarchingSteps, pointLightFinalPosition);
+        if (
+          distance(pointLightFinalPosition, rayStartPosition) > distance(pointLightPositions[pointLightIndex], rayStartPosition)
+          && sign(pointLightPositions[pointLightIndex].x - rayStartPosition.x) == sign(pointLightFinalPosition.x - rayStartPosition.x) 
+        ) {
+          accumulatedLight += pointLightColors[pointLightIndex] * accumulatedAlbedo / pow(distance(pointLightPositions[pointLightIndex], rayStartPosition), 2.0);
+        }
+      }
     }
     return accumulatedLight;
   #endif
