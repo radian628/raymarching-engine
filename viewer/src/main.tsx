@@ -125,20 +125,20 @@ const RaymarcherGUI = (props) => {
   let [renderGUIOptions, setRenderGUIOptions] =
     React.useState<RenderTaskGUIOptions>({
       primaryRaymarchingSteps: 64,
-      reflections: 16,
+      reflections: 3,
       focalPlaneDistance: -0.5,
       circleOfConfusionSize: -3,
       isRealtimeMode: true,
       blendFactor: 0.95,
       cameraSpeed: -2,
       isDoingHighQualityRender: false,
-      resolutionFactor: 1,
-      fogDensity: 0.4,
+      resolutionFactor: 0.5,
+      fogDensity: -0.8,
 
       hqRaymarchingSteps: 128,
       hqExposureAmount: 1,
-      hqSampleCount: 32,
-      hqReflections: 16,
+      hqSampleCount: 128,
+      hqReflections: 6,
       hqWidth: 1920,
       hqHeight: 1080
     });

@@ -41,7 +41,7 @@ uniform sampler2D prevFrameNormal;
 uniform sampler2D prevFrameAlbedo;
 uniform sampler2D prevFramePosition;
 
-#define POINT_LIGHT_COUNT 1u
+#define POINT_LIGHT_COUNT 2u
 //point light(s)
 uniform vec3 pointLightPositions[POINT_LIGHT_COUNT];
 uniform vec3 pointLightColors[POINT_LIGHT_COUNT];
@@ -105,12 +105,17 @@ float PRIMITIVE1(vec3 position2) {
   float sphereGridDist = 99999.0;
   for (float i = 0.0; i < 14.0; i++) {
     float sf = pow(0.3333333333, i);
+    float sf2 = pow(0.5, i);
   vec3 p = repeat(position + vec3(0.0), vec3(2.0 * sf));
-    sphereGridDist = min(
-      sphereGridDist, /*sdBox(p, vec3(0.667) * sf)*/length(p) - 0.79 * sf
-    );
+  vec3 p2 = repeat(position + vec3(0.0), vec3(2.0 * sf2));
+    sphereGridDist = min(min(
+      sphereGridDist, /*sdBox(p, vec3(0.667) * sf)*/length(p) - 1.01 * sf
+    ), length(p2) - 0.0* sf2);
   }
-  return max(length(position - vec3(0.0, 0.0, 0.0)) - 2.0, -sphereGridDist);
+  return max(max(
+    length(position - vec3(0.0, 0.0, 0.0)) - 2.0, 
+    -sphereGridDist
+  ), -(length(position) - 0.4));
   // float minDist = sdBox(position, vec3(1.0));
   // for (float i = 1.0; i < 4.0; i++) {
   //     float sf = pow(0.33333333333, i);
@@ -140,10 +145,10 @@ float PRIMITIVE3(vec3 position) {
 float SDF(vec3 position) {
   return min(
     PRIMITIVE1(position),
-    min(
-      PRIMITIVE2(position),
-      PRIMITIVE3(position)
-    )
+    //min(
+      PRIMITIVE2(position)
+     // PRIMITIVE3(position)
+    //)
   );
 }
 
@@ -153,9 +158,9 @@ vec3 albedo(vec3 position) {
     return vec3(0.83);
   } else if (sdf == PRIMITIVE2(position)) {
     return vec3(0.0);
-  } else if (sdf == PRIMITIVE3(position)) {
-    return vec3(0.0);
-  }
+  }// else if (sdf == PRIMITIVE3(position)) {
+    //return vec3(0.0);
+  //}
   //if (sdf == PRIMITIVE1(position)) {
   //  return vec3(1.0);
   //} else if (sdf == PRIMITIVE)
@@ -174,9 +179,9 @@ vec3 emission(vec3 position) {
     //pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(1.0, -1.0, -1.0)))), 16.0) + 
     //vec3(0.7, 0.7, 0.3) * 5.5 *
     //pow(max(0.0, 0.5 + 0.5 * dot(normalize(position + vec3(0.001)), normalize(vec3(-1.0, 1.0, -1.0)))), 16.0);
-  } else if (sdf == PRIMITIVE3(position)) {
-    return 0.01 *vec3(0.3, 0.4, 0.8) * 6.0;
-  }
+  } //else if (sdf == PRIMITIVE3(position)) {
+    //return 0.01 *vec3(0.3, 0.4, 0.8) * 6.0;
+  //}
 }
 
 float roughness(vec3 position) {
@@ -193,6 +198,9 @@ float subsurfOpacity(vec3 position) {
   }
 }
 
+float subsurfScatterFactor(vec3 position) {
+  return 1.0;//sin(position.x * 100.0) * 0.5 + 0.5;
+}
 
 //SCENE_PARAMS_END
 
@@ -290,18 +298,28 @@ vec3 getSample() {
       if (volumetricSample < pathLength) {
         //float volumetricPositionFactor = lambda * exp(-lambda * pathLength);
         rayStartPosition = rayStartPosition + direction * volumetricSample;
+        vec3 oldDirection = direction;
         direction = randUnitVec3();
+        //float deflection = distance(direction, oldDirection);
+        //accumulatedAlbedo *= vec3(
+        //  clamp(1.0 - pow(deflection * 20.0, 2.0), 0.0, 1.0), 
+        //  clamp(1.0 - pow(deflection * 20.0, 6.0), 0.0, 1.0), 
+        //  clamp(pow(deflection * 20.0, 10.0), 0.0, 1.0)
+        //  );
+
         //vec3 randVec = vec3(boxMuller(rand(), rand()), boxMuller(rand(), rand()).x);
         //direction = rotateQuat(direction, quatAngleAxis(0.6, normalize(cross(randVec, direction))));
       } else {
         
         float subsurfVolumentricSample = -1.0 / subsurfOpacity(finalPosition) * log(1.0 - rand());
-        vec3 subsurfScatterDirection = normalize(hemisphericalSample(normal));
+        vec3 subsurfScatterDirection = normalize(
+          mix(direction, normalize(hemisphericalSample(normal)), subsurfScatterFactor(finalPosition))
+        );
         vec3 subsurfScatterFinalPos = finalPosition + subsurfScatterDirection * subsurfVolumentricSample;
         accumulatedLight += emission(finalPosition) * accumulatedAlbedo;
         if (SDF(subsurfScatterFinalPos) > 0.0) {
           rayStartPosition = finalPosition + subsurfScatterDirection * subsurfVolumentricSample;
-          direction = randUnitVec3();
+          direction = normalize(mix(direction, randUnitVec3(), subsurfScatterFactor(finalPosition)));
         } else {
           //accumulatedLight += 
           accumulatedLight += emission(subsurfScatterFinalPos) * accumulatedAlbedo;

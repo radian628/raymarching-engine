@@ -62,7 +62,7 @@ interface RenderTaskOptions {
 }
 
 interface Uniforms {
-  [key: string]: ["f" | "i" | "ui", number | number[]];
+  [key: string]: ["f" | "i" | "ui", number | number[]] | ["f" | "i" | "ui", 1 | 2 | 3 | 4, number[]];
 }
 
 function setUniforms(
@@ -70,17 +70,32 @@ function setUniforms(
   program: WebGLProgram,
   gl: WebGL2RenderingContext
 ) {
-  for (let [uniformName, [uniformType, uniformValue]] of Object.entries(
+  for (let [uniformName, uniformData] of Object.entries(
     uniforms
   )) {
-    let uniformLocation = gl.getUniformLocation(program, uniformName);
-    if (typeof uniformValue == "number") {
-      gl["uniform1" + uniformType](uniformLocation, uniformValue);
+    if (uniformData.length == 2) {
+      let uniformType = uniformData[0];
+      let uniformValue = uniformData[1];
+      let uniformLocation = gl.getUniformLocation(program, uniformName);
+      if (typeof uniformValue == "number") {
+        gl["uniform1" + uniformType](uniformLocation, uniformValue);
+      } else {
+        gl["uniform" + uniformValue.length + uniformType + "v"](
+          uniformLocation,
+          uniformValue
+        );
+      }
     } else {
-      gl["uniform" + uniformValue.length + uniformType + "v"](
+      let uniformType = uniformData[0];
+      let uniformCount = uniformData[1];
+      let uniformValue = uniformData[2];
+      let uniformLocation = gl.getUniformLocation(program, uniformName);
+      let methodName = "uniform" + uniformCount + uniformType + "v"; 
+      gl[methodName](
         uniformLocation,
         uniformValue
       );
+      console.log(methodName, uniformValue);
     }
   }
 }
@@ -285,9 +300,9 @@ export function* doRenderTask(options: RenderTaskOptions) {
             prevFrameAlbedo: ["i", 2],
             prevFramePosition: ["i", 3],
             fogDensity: ["f", options.uniforms.fogDensity],
-            pointLightPositions: ["f", [3, 3, 3]],
-            pointLightColors: ["f", [5, 5, 5]],
-            pointLightShadeAmount: ["f", 0],
+            pointLightPositions: ["f", 3, [-0.2, -0.2, -0.2, 0.2, 0.2, 0.2]],
+            pointLightColors: ["f", 3, [2, 0, 0, 0, 0, 2]],
+            pointLightShadeAmount: ["f", 1, [0, 0]],
             pointLightRaymarchingSteps: ["ui", 64]
           },
           options.state.shader.program,

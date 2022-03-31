@@ -12,6 +12,8 @@ uniform sampler2D inputPosition;
 
 uniform float gamma;
 
+#define kernelSize 4.0
+
 float normalDist(float x, float mu, float sigma) {
   return 1.0 / (sigma * sqrt(2.0 * 3.14159265358979323)) * pow(exp(-0.5 * (x - mu) / sigma), 2.0);
 }
@@ -21,19 +23,19 @@ void main() {
 
   vec3 normalAverages = vec3(0.0, 0.0, 0.0);
   vec3 positionAverages = vec3(0.0);
-  for (float y = -8.0; y < 8.0; y++) {
-    for (float x = -8.0; x < 8.0; x++) {
+  for (float y = -kernelSize; y < kernelSize; y++) {
+    for (float x = -kernelSize; x < kernelSize; x++) {
       vec2 samplePos = texcoord + vec2(x, y) / vec2(textureSize(inputImage, 0));
       normalAverages += texture(inputNormal, samplePos).rgb;
       positionAverages += texture(inputPosition, samplePos).rgb;
     }
   }
-  normalAverages /= 225.0;
-  positionAverages /= 225.0;
+  normalAverages /= pow(kernelSize * 2.0 - 1.0, 2.0);
+  positionAverages /= pow(kernelSize * 2.0 - 1.0, 2.0);
   vec3 normalVariances = vec3(0.0, 0.0, 0.0);
   vec3 positionVariances = vec3(0.0, 0.0, 0.0);
-  for (float y = -8.0; y < 8.0; y++) {
-    for (float x = -8.0; x < 8.0; x++) {
+  for (float y = -kernelSize; y < kernelSize; y++) {
+    for (float x = -kernelSize; x < kernelSize; x++) {
       vec2 samplePos = texcoord + vec2(x, y) / vec2(textureSize(inputImage, 0));
       vec3 errorNormal = normalAverages - texture(inputNormal, samplePos).rgb;
       vec3 errorPosition = positionAverages - texture(inputPosition, samplePos).rgb;
@@ -41,15 +43,15 @@ void main() {
       positionVariances += errorPosition * errorPosition;
     }
   }
-  normalVariances /= 225.0;
-  positionVariances /= 225.0 * length(positionAverages)* length(positionAverages);
+  normalVariances /= pow(kernelSize * 2.0 - 1.0, 2.0);
+  positionVariances /= pow(kernelSize * 2.0 - 1.0, 2.0) * length(positionAverages)* length(positionAverages);
 
   float sigma = max(0.25, 0.03 / (0.00001 + length(normalVariances)));
 
   vec3 avgRGB = vec3(0.0);
   float normalDistAccumulation = 0.0;
-  for (float y = -8.0; y < 8.0; y++) {
-    for (float x = -8.0; x < 8.0; x++) {
+  for (float y = -kernelSize; y < kernelSize; y++) {
+    for (float x = -kernelSize; x < kernelSize; x++) {
       float normalDistSample = normalDist(length(vec2(x, y)), 0.0, sigma);
       normalDistAccumulation += normalDistSample;
       avgRGB += 
