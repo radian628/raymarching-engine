@@ -12,6 +12,7 @@ export async function loadShaders() {
 interface ShaderCompileOptions {
   change: boolean;
   isRealtimeMode: boolean;
+  pointLightCount: number;
 }
 
 interface RenderStateOptions {
@@ -58,6 +59,10 @@ interface RenderTaskOptions {
       amount: number;
     };
     fogDensity: number;
+    pointLightPositions: number[];
+    pointLightColors: number[];
+    pointLightShadowBrightnesses: number[];
+    pointLightRaymarchingSteps: number;
   };
 }
 
@@ -89,13 +94,13 @@ function setUniforms(
       let uniformType = uniformData[0];
       let uniformCount = uniformData[1];
       let uniformValue = uniformData[2];
+      if (uniformValue.length == 0) return;
       let uniformLocation = gl.getUniformLocation(program, uniformName);
       let methodName = "uniform" + uniformCount + uniformType + "v"; 
       gl[methodName](
         uniformLocation,
         uniformValue
       );
-      console.log(methodName, uniformValue);
     }
   }
 }
@@ -156,6 +161,7 @@ function setShaderDefine(shaderSource, define) {
 function setShaderOptions(options: ShaderCompileOptions): string {
   let shaderSource = RAYMARCHER_SRC;
   if (options.isRealtimeMode) shaderSource = setShaderDefine(shaderSource, "IS_REALTIME_MODE");
+  if (options.pointLightCount !== 0) shaderSource = setShaderDefine(shaderSource, `POINT_LIGHT_COUNT ${options.pointLightCount}u`);
   return shaderSource;
 }
 
@@ -300,10 +306,10 @@ export function* doRenderTask(options: RenderTaskOptions) {
             prevFrameAlbedo: ["i", 2],
             prevFramePosition: ["i", 3],
             fogDensity: ["f", options.uniforms.fogDensity],
-            pointLightPositions: ["f", 3, [-0.2, -0.2, -0.2, 0.2, 0.2, 0.2]],
-            pointLightColors: ["f", 3, [2, 0, 0, 0, 0, 2]],
-            pointLightShadeAmount: ["f", 1, [0, 0]],
-            pointLightRaymarchingSteps: ["ui", 64]
+            pointLightPositions: ["f", 3, options.uniforms.pointLightPositions],
+            pointLightColors: ["f", 3, options.uniforms.pointLightColors],
+            pointLightShadeAmount: ["f", 1, options.uniforms.pointLightShadowBrightnesses],
+            pointLightRaymarchingSteps: ["ui", options.uniforms.pointLightRaymarchingSteps]
           },
           options.state.shader.program,
           gl
@@ -478,7 +484,7 @@ export function createRenderState(options: RenderStateOptions): RenderState {
     shader: {
       vertex: vertexShader,
       fragment: fragmentShader,
-      compileOptions: { change: true, isRealtimeMode: false },
+      compileOptions: { change: true, isRealtimeMode: false, pointLightCount: 0 },
       program: gl.createProgram(),
       gammaCorrection: gammaCorrectionProgram
     },

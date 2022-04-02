@@ -41,13 +41,14 @@ uniform sampler2D prevFrameNormal;
 uniform sampler2D prevFrameAlbedo;
 uniform sampler2D prevFramePosition;
 
-#define POINT_LIGHT_COUNT 2u
+//#define POINT_LIGHT_COUNT 3u
 //point light(s)
+#ifdef POINT_LIGHT_COUNT
 uniform vec3 pointLightPositions[POINT_LIGHT_COUNT];
 uniform vec3 pointLightColors[POINT_LIGHT_COUNT];
 uniform float pointLightShadeAmount[POINT_LIGHT_COUNT];
 uniform uint pointLightRaymarchingSteps;
-
+#endif
 const float PI = 3.14159265;
 
 
@@ -337,7 +338,7 @@ vec3 getSample() {
         eventualPositionOut = (volumetricSample < pathLength) ? texture(prevFramePosition, in_position.xy * 0.5 + 0.5) :vec4((finalPosition - rayStartPosition), 1.0);
       }
       //accumulatedAlbedo *= max(1.0 - volumetricChance, 0.0);
-  
+  #ifdef POINT_LIGHT_COUNT
       for (uint pointLightIndex = 0u; pointLightIndex < POINT_LIGHT_COUNT; pointLightIndex++) {
         vec3 pointLightFinalPosition;
         marchRay(rayStartPosition, normalize(pointLightPositions[pointLightIndex] - rayStartPosition), pointLightRaymarchingSteps, pointLightFinalPosition);
@@ -348,6 +349,7 @@ vec3 getSample() {
           accumulatedLight += pointLightColors[pointLightIndex] * accumulatedAlbedo / pow(distance(pointLightPositions[pointLightIndex], rayStartPosition), 2.0);
         }
       }
+  #endif
     }
     return accumulatedLight;
   #endif
