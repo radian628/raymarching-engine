@@ -184,7 +184,7 @@ const MainCanvas = (props) => {
               blendFactor:
                 vec3.length(movementVec) == 0 && deltaRotation == 0
                   ? guiOpts.blendFactor
-                  : 0,
+                  : 0.1,
               dof: {
                 distance: Math.pow(10, guiOpts.focalPlaneDistance),
                 amount: Math.pow(10, guiOpts.circleOfConfusionSize),

@@ -3,11 +3,13 @@ import { getLeadingCommentRanges } from "../node_modules/typescript/lib/typescri
 let RAYMARCHER_SRC;
 let VERTEX_SRC;
 let GAMMA_CORRECTION_SRC;
+let BLIT_SRC
 
 export async function loadShaders() {
   RAYMARCHER_SRC = await (await fetch("../resources/raymarcher.glsl")).text();
   VERTEX_SRC = await (await fetch("../resources/vertex.glsl")).text();
   GAMMA_CORRECTION_SRC = await (await fetch("../resources/gamma_correction.glsl")).text();
+  BLIT_SRC = await (await fetch("../resources/blit.glsl")).text();
 }
 interface ShaderCompileOptions {
   change: boolean;
@@ -34,6 +36,7 @@ interface RenderState {
     compileOptions: ShaderCompileOptions;
     program: WebGLProgram;
     gammaCorrection: WebGLProgram;
+    blit: WebGLProgram;
   };
 }
 
@@ -326,27 +329,42 @@ export function* doRenderTask(options: RenderTaskOptions) {
           options.state.height
         );
 
-        gl.bindFramebuffer(
-          gl.READ_FRAMEBUFFER,
-          options.state.currentRenderTarget.framebuffer
-        );
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.currentRenderTarget.colorTex);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.currentRenderTarget.normalTex);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.currentRenderTarget.albedoTex);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, options.state.currentRenderTarget.positionTex);
+        
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, options.state.previousRenderTarget.framebuffer);
-        for (let i = 0; i < 4; i++) {
-          gl.readBuffer(gl.COLOR_ATTACHMENT0 + i);
-          gl.drawBuffers([...new Array(i).fill(null), gl.COLOR_ATTACHMENT0 + i]); 
-          gl.blitFramebuffer(
-            0,
-            0,
-            options.state.width,
-            options.state.height,
-            0,
-            0,
-            options.state.width,
-            options.state.height,
-            gl.COLOR_BUFFER_BIT,
-            gl.NEAREST
-          );
-        }
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3]);
+        gl.useProgram(options.state.shader.blit);
+        setUniforms({
+          inputImage: ["i", 0],
+          inputNormal: ["i", 1],
+          inputAlbedo: ["i", 2],
+          inputPosition: ["i", 3],
+        }, options.state.shader.blit, gl);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        // for (let i = 0; i < 4; i++) {
+        //   gl.readBuffer(gl.COLOR_ATTACHMENT0 + i);
+        //   gl.drawBuffers([...new Array(i).fill(gl.NONE), gl.COLOR_ATTACHMENT0 + i]); 
+        //   gl.blitFramebuffer(
+        //     0,
+        //     0,
+        //     options.state.width,
+        //     options.state.height,
+        //     0,
+        //     0,
+        //     options.state.width,
+        //     options.state.height,
+        //     gl.COLOR_BUFFER_BIT,
+        //     gl.NEAREST
+        //   );
+        // }
 
         gl.bindFramebuffer(
           gl.READ_FRAMEBUFFER,
@@ -381,6 +399,7 @@ export function* doRenderTask(options: RenderTaskOptions) {
           options.state.currentRenderTarget.framebuffer
         );
 
+        gl.readBuffer(gl.COLOR_ATTACHMENT0);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
         yield;
@@ -470,11 +489,18 @@ export function createRenderState(options: RenderStateOptions): RenderState {
 
   let gammaCorrectionShader = gl.createShader(gl.FRAGMENT_SHADER);
 
+  let blitShader = gl.createShader(gl.FRAGMENT_SHADER);
+
   makeShader(vertexShader, VERTEX_SRC, gl);
   makeShader(gammaCorrectionShader, GAMMA_CORRECTION_SRC, gl);
+  makeShader(blitShader, BLIT_SRC, gl);
 
   let gammaCorrectionProgram = gl.createProgram();
   makeProgram(gammaCorrectionProgram, vertexShader, gammaCorrectionShader, gl);
+
+  let blitProgram = gl.createProgram();
+  makeProgram(blitProgram, vertexShader, blitShader, gl);
+  
 
   let renderState: RenderState = {
     gl,
@@ -486,7 +512,8 @@ export function createRenderState(options: RenderStateOptions): RenderState {
       fragment: fragmentShader,
       compileOptions: { change: true, isRealtimeMode: false, pointLightCount: 0 },
       program: gl.createProgram(),
-      gammaCorrection: gammaCorrectionProgram
+      gammaCorrection: gammaCorrectionProgram,
+      blit: blitProgram
     },
     width: options.width,
     height: options.height,
