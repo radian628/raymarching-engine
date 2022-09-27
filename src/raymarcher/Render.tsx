@@ -47,6 +47,19 @@ export type RenderTaskOptions = {
     canvas: HTMLCanvasElement,
 }
 
+export type SerializableRenderTaskOptions = {
+    position: vec3,
+    rotation: [
+        number, number, number, number, 
+        number, number, number, number, 
+        number, number, number, number, 
+        number, number, number, number
+    ],
+    dimensions: vec2,
+    partitions: vec2,
+    samples: number
+};
+
 export type Result<T> = T & { isError?: false } | {
     message: string,
     isError: true

@@ -60,7 +60,7 @@ vec3 sceneDiffuseColor(vec3 position) {
 }
 
 vec3 sceneSpecularColor(vec3 position) {
-    return vec3(1.0);//vec3(mod(position / 3.0, 1.0) * 0.5 + vec3(0.5)) * 1.0;
+    return vec3(0.8);//vec3(mod(position / 3.0, 1.0) * 0.5 + vec3(0.5)) * 1.0;
 }
 
 float sceneSpecularRoughness(vec3 position) {
@@ -71,20 +71,30 @@ float sceneSubsurfaceScattering(vec3 position) {
     return 0.2;
 }
 
+float sdfFractal(vec3 position) {
+    float subtractedGrid = 9999.9;
+    for (float x = 0.0; x < 9.0; x++) {
+        float sf = pow(0.5, x);
+        subtractedGrid = min(
+            sdfSphere(mod(position, 3.0 * sf) - 1.5 * sf, vec3(0,0,0), 1.09 * sf),
+            subtractedGrid
+        );
+    }
+    return max(
+        sdfSphere(mod(position, 6.0) - 3.0, vec3(0,0,0), 2.7),
+        -subtractedGrid
+    );
+}
+
 vec3 sceneEmission(vec3 position) {
-    float sphere1 = sdfSphere(mod(position, 6.0) - 3.0, vec3(0,0,0), 2.7);
-    float plane = position.y + 1.0;
-    if (min(sphere1, plane) == plane) return vec3(0.0);
+    //float sphere1 = sdfSphere(mod(position, 6.0) - 3.0, vec3(0,0,0), 2.7);
     vec3 idx = floor(position / 6.0);
     return (mod(idx.x + idx.y + idx.z, 30.0) == 0.0) ? vec3(3.0) : vec3(0.0);
 }
 
 // scene SDF
 float sdf(vec3 position) {
-    return min(
-        sdfSphere(mod(position, 6.0) - 3.0, vec3(0,0,0), 2.7),
-        position.y + 1.0
-    );
+    return sdfFractal(position);
 }
 
 float invExpDist(float x, float lambda) {
@@ -92,7 +102,7 @@ float invExpDist(float x, float lambda) {
 }
 
 // get normal at position
-vec3 normal(vec3 position, float delta) {
+vec3 sceneNormal(vec3 position, float delta) {
     float sdfAtPos = sdf(position);
     return normalize(vec3(
         sdf(position + vec3(delta, 0, 0)) - sdfAtPos,
@@ -120,7 +130,7 @@ void main(void) {
         random(randNoise + texcoord),
         random(randNoise + texcoord * 2.0),
         random(randNoise + texcoord * 3.0)
-    ) * 0.1;
+    ) * 0.0;
     vec3 rayPosition = position + dofOffset;
     vec2 randomDirectionOffset = vec2(random(randNoise + texcoord.xy), random(randNoise + texcoord.xy * 2.0))
         / vec2(textureSize(previousColor, 0)) * 1.0;
@@ -142,7 +152,7 @@ void main(void) {
         currentLight += currentAlbedo * sceneEmission(rayPosition);
         
         // find normal
-        vec3 normal = normal(rayPosition, 0.0001);
+        vec3 normal = sceneNormal(rayPosition, 0.0001);
 
         // get diffuse/specular colors and get probability factor for which one to use
         vec3 diffuseCol = sceneDiffuseColor(rayPosition);
@@ -157,8 +167,22 @@ void main(void) {
         if (random(rayPosition.xy + randNoise) < probFactor) {
             probabilityFactor *= 1.0 - probFactor;
             currentAlbedo *= diffuseCol;
-            vec3 newDir = sphereSample();
-            rayDirection = sign(dot(normal, newDir)) * newDir;
+            rayPosition += 0.01 * rayDirection;
+            for (int j = 0; j < 3; j++) {
+                vec3 newDir = sphereSample();
+                rayDirection = newDir;
+                float pathLength = invExpDist(random(rayPosition.yz), 30.0);
+                vec3 lastRayPosition = rayPosition;
+                rayPosition = castRay(rayPosition, rayDirection, 32.0);
+                if (distance(rayPosition, lastRayPosition) > pathLength) {
+                    rayPosition = lastRayPosition + rayDirection * pathLength;
+                }
+                if (sdf(rayPosition) > -0.01) {
+                    rayPosition = rayPosition + 0.02 * sceneNormal(rayPosition, 0.0001);
+                    break;
+                }
+            }
+            //rayDirection = sign(dot(normal, newDir)) * newDir;
 
         // specular reflection
         } else {
