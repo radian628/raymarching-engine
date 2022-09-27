@@ -8,5 +8,5 @@ in vec2 texcoord;
 out vec4 fragColor;
 
 void main(void) {
-    fragColor = texture(inputImage, texcoord);
+    fragColor = pow(texture(inputImage, texcoord), vec4(1.0 / 2.2));
 }
