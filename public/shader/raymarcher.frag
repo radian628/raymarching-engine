@@ -32,16 +32,28 @@ float sdfSphere(vec3 position, vec3 center, float radius) {
     return distance(position, center) - radius;
 }
 
+vec2 seed = vec2(0,0);
+const float PI = 3.141592;
+vec2 boxMullerTransform() {
+    seed += vec2(1,1);
+    float u1 = random(seed + randNoise);
+    float u2 = random(seed + randNoise + vec2(0.5, 0.3));
+    float twoPiU2 = 2.0 * PI * u2;
+    return sqrt(-2.0 * log(u1)) * vec2(
+        cos(twoPiU2), sin(twoPiU2)
+    );
+}
+
 vec3 sceneDiffuseColor(vec3 position) {
     return vec3(mod(position / 3.0, 1.0) * 0.5 + vec3(0.5));
 }
 
 vec3 sceneSpecularColor(vec3 position) {
-    return vec3(mod(position / 3.0, 1.0) * 0.5 + vec3(0.5)) * 1.0;
+    return vec3(0.3);//vec3(mod(position / 3.0, 1.0) * 0.5 + vec3(0.5)) * 1.0;
 }
 
 float sceneSpecularRoughness(vec3 position) {
-    return 0.1;
+    return 0.5;
 }
 
 vec3 sceneEmission(vec3 position) {
@@ -49,7 +61,7 @@ vec3 sceneEmission(vec3 position) {
     float sphere2 = sdfSphere(mod(position, 2.0) - 1.0, vec3(0,0,0), 0.7);
     float plane = position.y + 1.0;
     if (min(sphere1, sphere2) > 0.01 || min(sphere1, min(sphere2, plane)) == plane) return vec3(0.0);
-    return (min(sphere1, sphere2) == sphere1) ? vec3(4.0) : vec3(0.0);
+    return (min(sphere1, sphere2) == sphere1) ? vec3(14.0) : vec3(0.0);
 }
 
 float sdf(vec3 position) {
