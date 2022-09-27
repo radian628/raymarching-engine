@@ -6,6 +6,8 @@ precision highp float;
 uniform float blendWithPreviousFactor;
 uniform sampler2D previousColor;
 uniform vec2 randNoise;
+uniform vec3 position;
+uniform mat4 rotation;
 
 float random (vec2 st) {
     return fract(sin(dot(st.xy,
@@ -77,13 +79,13 @@ vec3 castRay(vec3 rayPosition, vec3 rayDirection, float steps) {
 void main(void) {
     vec3 dofOffset = vec3(
         random(randNoise + texcoord),
-        random(randNoise  + texcoord * 2.0),
+        random(randNoise + texcoord * 2.0),
         random(randNoise + texcoord * 3.0)
     ) * 0.1;
-    vec3 rayPosition = vec3(0.0, 0.0, 0.0) + dofOffset;
+    vec3 rayPosition = position + dofOffset;
     vec2 randomDirectionOffset = vec2(random(randNoise + texcoord.xy), random(randNoise + texcoord.xy * 2.0))
         / vec2(textureSize(previousColor, 0)) * 1.0;
-    vec3 rayDirectionNotNormalized = vec3(texcoord.xy * 2.0 - 1.0 + randomDirectionOffset, 1.0);
+    vec3 rayDirectionNotNormalized = (rotation * vec4(texcoord.xy * 2.0 - 1.0 + randomDirectionOffset, 1.0, 0.0)).xyz;
     vec3 rayDirectionGoal = rayDirectionNotNormalized * 5.0;
     vec3 rayDirection = normalize(rayDirectionGoal - dofOffset);
 
@@ -91,7 +93,7 @@ void main(void) {
     vec3 currentLight = vec3(0.0);
     float probabilityFactor = 1.0;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 3; i++) {
         rayPosition = castRay(rayPosition, rayDirection, 64.0);
         currentLight += currentAlbedo * sceneEmission(rayPosition);
         vec3 normal = normal(rayPosition, 0.0001);
@@ -125,6 +127,7 @@ void main(void) {
 
 
     //vec4 currentFragColor = vec4(vec3(dot(normal(rayPosition, 0.0001), normalize(vec3(1.0, 1.0, -1.0)))), 1.0);
+    
     fragColor = mix(
         vec4(currentLight, 1.0),
         texture(previousColor, texcoord),

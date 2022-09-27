@@ -1,10 +1,11 @@
 import * as twgl from "twgl.js";
+import { m4 } from "twgl.js";
 
-type vec2 = [number, number]
-type vec3 = [number, number, number]
-type vec4 = [number, number, number, number]
-type mat4 = [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]
-type mat3 = [number, number, number, number, number, number, number, number, number]
+export type vec2 = [number, number]
+export type vec3 = [number, number, number]
+export type vec4 = [number, number, number, number]
+//export type mat4 = [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]
+//export type mat3 = [number, number, number, number, number, number, number, number, number]
 
 type RenderTaskGLState = {
     canvas: HTMLCanvasElement,
@@ -28,7 +29,7 @@ export type RenderTask = {
     samplesSoFar: number,
 
     position: vec3,
-    rotation: mat3,
+    rotation: m4.Mat4,
 
     doRenderStep: () => void,
     displayProgressImage: () => void,
@@ -39,7 +40,7 @@ export type RenderTask = {
 
 export type RenderTaskOptions = {
     position: vec3,
-    rotation: mat3,
+    rotation: m4.Mat4,
     dimensions: vec2,
     partitions: vec2,
     samples: number,
@@ -51,9 +52,50 @@ export type Result<T> = T & { isError?: false } | {
     isError: true
 }
 
+const fetchCache = new Map<string, string>();
 async function fetchText(url: string) {
-    return (await fetch(url)).text();
+    if (fetchCache.has(url)) {
+        return fetchCache.get(url) as string;
+    } else {
+        const text = await (await fetch(url)).text();
+        fetchCache.set(url, text);
+        return text;
+    }
 }
+
+const programInfoCache = new Map<string, twgl.ProgramInfo>();
+function memoizedCreateProgramInfo(gl: WebGL2RenderingContext, sources: [string, string]) {
+    const key = sources.join("$");
+    if (programInfoCache.has(key)) {
+        return programInfoCache.get(key) as twgl.ProgramInfo;
+    } else {
+        let prog = twgl.createProgramInfo(gl, sources);
+        programInfoCache.set(key, prog);
+        return prog;
+    }
+}
+
+function makeMemoizedFramebufferGetter() {
+    let memoizedFB: twgl.FramebufferInfo | undefined;
+    let lastX = 0;
+    let lastY = 0;
+    let lastGL: WebGL2RenderingContext | undefined;
+    return function (gl: WebGL2RenderingContext, x: number, y: number) {
+        if (!memoizedFB || lastX != x || lastY != y || gl !== lastGL) {
+            console.log("bad cache");
+            lastX = x;
+            lastY = y;
+            lastGL = gl;
+            memoizedFB = twgl.createFramebufferInfo(gl, [{ format: gl.RGBA, internalFormat: gl.RGBA32F, mag: gl.NEAREST, target: gl.TEXTURE_2D }], x, y);
+            return memoizedFB as twgl.FramebufferInfo;
+        } else {
+            return memoizedFB;
+        }
+    }
+}
+
+const getCurrentFramebuffer = makeMemoizedFramebufferGetter();
+const getPrevFramebuffer = makeMemoizedFramebufferGetter();
 
 export async function createRenderTask(options: RenderTaskOptions): Promise<Result<RenderTask>> {
     
@@ -78,17 +120,17 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
         ] }
     };
 
-    const displayProgram = twgl.createProgramInfo(gl, [
+    const displayProgram = memoizedCreateProgramInfo(gl, [
         await fetchText("./shader/display.vert"),
         await fetchText("./shader/display.frag"),
     ]);
 
-    const blitProgram = twgl.createProgramInfo(gl, [
+    const blitProgram = memoizedCreateProgramInfo(gl, [
         await fetchText("./shader/blit.vert"),
         await fetchText("./shader/blit.frag"),
     ]);
 
-    const raymarchProgram = twgl.createProgramInfo(gl, [
+    const raymarchProgram = memoizedCreateProgramInfo(gl, [
         await fetchText("./shader/raymarcher.vert"),
         await fetchText("./shader/raymarcher.frag"),
     ]);
@@ -117,8 +159,8 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                 blit: blitProgram,
             },
             fb: {
-                prev: twgl.createFramebufferInfo(gl, [{ format: gl.RGBA, internalFormat: gl.RGBA32F, mag: gl.NEAREST, target: gl.TEXTURE_2D }], ...options.dimensions),
-                curr: twgl.createFramebufferInfo(gl, [{ format: gl.RGBA, internalFormat: gl.RGBA32F, mag: gl.NEAREST, target: gl.TEXTURE_2D }], ...options.dimensions),
+                prev: getPrevFramebuffer(gl, ...options.dimensions),
+                curr: getCurrentFramebuffer(gl, ...options.dimensions),
             }
         },
 
@@ -130,7 +172,9 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
             twgl.setUniforms(this.glState.shader.raymarch, {
                 blendWithPreviousFactor: 1 - 1 / (this.samplesSoFar + 1),
                 previousColor: this.glState.fb.prev.attachments[0],
-                randNoise: [Math.random(), Math.random()]
+                randNoise: [Math.random(), Math.random()],
+                position: this.position,
+                rotation: this.rotation
             })
             twgl.setBuffersAndAttributes(gl, this.glState.shader.raymarch, bufferInfo);
             twgl.drawBufferInfo(gl, this.glState.vao);
