@@ -1,6 +1,6 @@
 import { createRef, SetStateAction, useEffect, useMemo, useRef, useState } from "react"
 import { m4, v3 } from "twgl.js";
-import { createRenderTask, RenderTask, RenderTaskOptions, vec3 } from "./raymarcher/Render"
+import { createRenderTask, RenderTask, RenderTaskOptions, vec3 } from "../raymarcher/Render"
 
 const keysDown = new Map<string, boolean>();
 document.addEventListener("keydown", e => {
@@ -26,7 +26,7 @@ export function ConsumerMainCanvas(props: {
     const animate = () => {
         if (props.renderStateRef.current) {
             //rops.renderStateRef.current.doRenderStep();
-            //props.renderStateRef.current.displayProgressImage();
+            props.renderStateRef.current.displayProgressImage();
 
             let translation = [0, 0, 0]
             if (keysDown.get("W")) translation[2] += 0.1;

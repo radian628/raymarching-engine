@@ -1,5 +1,5 @@
 import { createRef, SetStateAction, useEffect, useRef } from "react";
-import { RenderTask, RenderTaskOptions, createRenderTask } from "./raymarcher/Render";
+import { RenderTask, RenderTaskOptions, createRenderTask } from "../raymarcher/Render";
 
 export function ProducerMainCanvas(props: {
     renderSettings: RenderTaskOptions | undefined,

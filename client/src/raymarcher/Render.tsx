@@ -38,6 +38,7 @@ export type RenderTask = {
     isRenderDone: () => boolean,
     getFinalImage: () => Promise<Blob>,
     merge: (url: string, samples: number) => Promise<void>,
+    currentToPrevious: () => void
 
     glState: RenderTaskGLState
 };
@@ -202,6 +203,13 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
             twgl.setBuffersAndAttributes(gl, this.glState.shader.raymarch, bufferInfo);
             twgl.drawBufferInfo(gl, this.glState.vao);
 
+            this.currentToPrevious();
+
+            this.samplesSoFar++;
+            
+        },
+
+        currentToPrevious() {
             // copy to previous
             gl.useProgram(this.glState.shader.blit.program);
             twgl.setUniforms(this.glState.shader.blit, {
@@ -211,8 +219,6 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
             twgl.setBuffersAndAttributes(gl, this.glState.shader.raymarch, bufferInfo);
             twgl.drawBufferInfo(gl, this.glState.vao);
 
-            this.samplesSoFar++;
-            
         },
 
         displayProgressImage() {
@@ -274,11 +280,11 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
                         gl.viewport(0, 0, 512, 512);
-                        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+                        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.glState.fb.curr.framebuffer);
                         ///gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-                        // gl.useProgram(this.glState.shader.merge.program);
+                        gl.useProgram(this.glState.shader.merge.program);
                         twgl.setUniforms(this.glState.shader.merge, {
-                            color1: this.glState.fb.curr.attachments[0],
+                            color1: this.glState.fb.prev.attachments[0],
                             color2: tex,
                             factor: (samples > this.samplesSoFar) ? (1 - this.samplesSoFar / samples) : (samples / this.samplesSoFar)
                         });
@@ -292,6 +298,9 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                         console.log("gl error:", gl.getError());
                         this.samplesSoFar += samples;
                         gl.deleteTexture(tex);
+
+                        this.currentToPrevious();
+
                         resolve();
                     }, 0);
                 };
