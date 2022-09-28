@@ -11,7 +11,9 @@ function setProp<T extends {}, K extends keyof T>(obj: T, prop: K, value: T[K]) 
     };
 }
 
-export function DistRenderConsumer() {
+export function DistRenderConsumer(props: {
+    onReceiveImage: (img: HTMLImageElement) => void
+}) {
 
     const [editableConsumerState, setEditableConsumerState] = useState({
         joincode: "",
@@ -24,9 +26,14 @@ export function DistRenderConsumer() {
         secret: ""
     });
 
+    const producerLink = `${window.location.origin}?producer&joincode=${
+        encodeURIComponent(consumerState.joincode)
+    }&server=${encodeURIComponent(consumerState.server)}`;
+
     return <div>
         <p>Current join code: {consumerState.joincode}</p>
         <p>Current distributed rendering server: <a href={consumerState.server}>{consumerState.server}</a></p>
+        <p>Producer Link: <a href="producerLink">{consumerState.server ? producerLink : "none"}</a></p>
         <label>Join Code</label>
         <input
             value={editableConsumerState.joincode}

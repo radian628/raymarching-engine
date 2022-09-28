@@ -4,7 +4,7 @@ import bodyParser from "body-parser";
 import cors from "cors";
 var app = express();
 app.get("/", function (req, res) {
-    res.send("<!DOCTYPE html>\n<html>\n    <head>\n        <meta http-equiv=\"Content-Security-Policy\" content=\"default-src *\">\n    </head>\n    <body>\n    </body>\n</html>\n    ");
+    res.send("<!DOCTYPE html>\n<html>\n    <head>\n    </head>\n    <body>\n        <p>You've reached the renderfarm!</p>\n    </body>\n</html>\n    ");
 });
 app.use(cors());
 function getRenderGroup(req, res, next) {
