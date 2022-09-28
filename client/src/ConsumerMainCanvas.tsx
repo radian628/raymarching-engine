@@ -1,4 +1,4 @@
-import { createRef, useEffect, useMemo, useRef, useState } from "react"
+import { createRef, SetStateAction, useEffect, useMemo, useRef, useState } from "react"
 import { m4, v3 } from "twgl.js";
 import { createRenderTask, RenderTask, RenderTaskOptions, vec3 } from "./raymarcher/Render"
 
@@ -10,12 +10,16 @@ document.addEventListener("keyup", e => {
     keysDown.set(e.key.toUpperCase(), false);
 });
 
-export function MainCanvas() {
+export function ConsumerMainCanvas(props: {
+    renderSettings: RenderTaskOptions | undefined,
+    setRenderSettings: React.Dispatch<SetStateAction<RenderTaskOptions | undefined>>
+}) {
+    
     const canvasRef = createRef<HTMLCanvasElement>();
 
     const renderStateRef = useRef<RenderTask | undefined>(undefined);
 
-    const [renderSettings, setRenderSettings] = useState<RenderTaskOptions | undefined>();
+    //const [renderSettings, setRenderSettings] = useState<RenderTaskOptions | undefined>();
 
     const mouseDeltas = useRef<[number, number]>([0, 0]);
 
@@ -35,7 +39,7 @@ export function MainCanvas() {
             if (keysDown.get("SHIFT")) translation[1] -= 0.1;
             if (translation[0] != 0 || translation[1] != 0 || translation[2] != 0 || mouseDeltas.current[0] != 0 || mouseDeltas.current[1] != 0) {
                 const mouseDeltasCopy = [mouseDeltas.current[0], mouseDeltas.current[1]];
-                setRenderSettings(renderSettingsOld => {
+                props.setRenderSettings(renderSettingsOld => {
                     mouseDeltas.current[0] = 0;
                     mouseDeltas.current[1] = 0;
                     let translation2: v3.Vec3 | undefined;
@@ -61,13 +65,14 @@ export function MainCanvas() {
     useEffect(() => {
         const elem = canvasRef.current;
         if (!elem) return;
-        if (!renderSettings) return;
+        if (!props.renderSettings) return;
         (async () => {
-            const maybeRenderTask = await createRenderTask(renderSettings);
+            //@ts-ignore
+            const maybeRenderTask = await createRenderTask(props.renderSettings);
             if (maybeRenderTask.isError) return;
             renderStateRef.current = maybeRenderTask;
         })()
-    }, [renderSettings]);
+    }, [props.renderSettings]);
 
     useEffect(() => {
         animFrameRef.current = requestAnimationFrame(animate);
@@ -79,8 +84,8 @@ export function MainCanvas() {
         if (!elem) return;
 
         //console.log("rendersettings: ", renderSettings);
-        if (!renderSettings) {
-            setRenderSettings({
+        if (!props.renderSettings) {
+            props.setRenderSettings({
                 position: [0, 0,0],
                 rotation: m4.identity(),
                 dimensions: [512, 512],
@@ -115,8 +120,8 @@ export function MainCanvas() {
 
 
     return <canvas
-        width={renderSettings?.dimensions[0] ?? 512}
-        height={renderSettings?.dimensions[1] ?? 512}
+        width={props.renderSettings?.dimensions[0] ?? 512}
+        height={props.renderSettings?.dimensions[1] ?? 512}
         ref={canvasRef}
         onMouseMove={e => {
             if (document.pointerLockElement === e.currentTarget) {

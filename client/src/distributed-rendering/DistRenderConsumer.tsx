@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { useInterval } from "../Util";
 
 export type DistRenderConsumerState = {
-    joincode: string
+    joincode: string,
+    server: string,
+    secret: string
 }
 
 function setProp<T extends {}, K extends keyof T>(obj: T, prop: K, value: T[K]) {
@@ -12,7 +15,9 @@ function setProp<T extends {}, K extends keyof T>(obj: T, prop: K, value: T[K]) 
 }
 
 export function DistRenderConsumer(props: {
-    onReceiveImage: (img: HTMLImageElement) => void
+    onReceiveImage: (img: HTMLImageElement) => void,
+    consumerState: DistRenderConsumerState,
+    setConsumerState: (s: DistRenderConsumerState) => void
 }) {
 
     const [editableConsumerState, setEditableConsumerState] = useState({
@@ -20,20 +25,31 @@ export function DistRenderConsumer(props: {
         server: ""
     });
 
-    const [consumerState, setConsumerState] = useState({
-        joincode: "",
-        server: "",
-        secret: ""
-    });
+    useInterval(async () => {
+        if (props.consumerState.secret != "") {
+            // const imgRes = (await fetch(`${props.consumerState.server}/dequeue-output/${props.consumerState.joincode}`, {
+            //     method: "POST",
+            //     mode: "cors"
+            // }));
+            // if (!imgRes.ok) {
+            //     console.log("nothing in queue");
+            //     return;
+            // }
+            // const imgBlob = await imgRes.blob();
+            // const img = new Image();
+            // img.src = URL.createObjectURL(imgBlob);
+            // props.onReceiveImage(img);
+        }
+    }, 100);
 
     const producerLink = `${window.location.origin}?producer&joincode=${
-        encodeURIComponent(consumerState.joincode)
-    }&server=${encodeURIComponent(consumerState.server)}`;
+        encodeURIComponent(props.consumerState.joincode)
+    }&server=${encodeURIComponent(props.consumerState.server)}`;
 
     return <div>
-        <p>Current join code: {consumerState.joincode}</p>
-        <p>Current distributed rendering server: <a href={consumerState.server}>{consumerState.server}</a></p>
-        <p>Producer Link: <a href="producerLink">{consumerState.server ? producerLink : "none"}</a></p>
+        <p>Current join code: {props.consumerState.joincode}</p>
+        <p>Current distributed rendering server: <a href={props.consumerState.server}>{props.consumerState.server}</a></p>
+        <p>Producer Link: <a href={producerLink}>{props.consumerState.server ? producerLink : "none"}</a></p>
         <label>Join Code</label>
         <input
             value={editableConsumerState.joincode}
@@ -62,7 +78,7 @@ export function DistRenderConsumer(props: {
                     }
                 )).text();
 
-                setConsumerState({
+                props.setConsumerState({
                     ...editableConsumerState,
                     secret
                 });

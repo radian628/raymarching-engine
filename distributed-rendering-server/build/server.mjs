@@ -43,26 +43,37 @@ app.post("/enqueue-output/:joincode/:frameid", getRenderGroup, bodyParser.raw(),
         data: req.body
     });
 });
-app.post("/dequeue-output/:joincode", getRenderGroup, function (req, res) {
+app.post("/dequeue-output/:joincode", getRenderGroup, bodyParser.text(), function (req, res) {
     var s = rgs(req);
     if (s.outputQueue.length == 0) {
         res.status(404).end("outputQueue is empty.");
         return;
     }
+    if (s.secret != req.body) {
+        res.status(401).end("Cannot dequeue output: Unauthorized.");
+        return;
+    }
     var data = s.outputQueue.splice(0, 1);
     res.end(data[0].data);
 });
-app.post("/enqueue-input/:joincode/:frameid", getRenderGroup, bodyParser.text(), function (req, res) {
+app.post("/enqueue-input/:joincode/:frameid", getRenderGroup, bodyParser.json(), function (req, res) {
     var s = rgs(req);
-    s.inputQueue.push(req.body);
+    // if (s.secret != req.body) {
+    //     res.status(401).end("Cannot dequeue output: Unauthorized.");
+    //     return;
+    // }
+    console.log("Enqueued input:", JSON.stringify(req.body));
+    s.inputQueue.push(JSON.stringify(req.body));
+    res.end();
 });
 app.post("/dequeue-input/:joincode", getRenderGroup, function (req, res) {
     var s = rgs(req);
-    if (s.outputQueue.length == 0) {
+    if (s.inputQueue.length == 0) {
         res.status(404).end("inputQueue is empty.");
         return;
     }
     var data = s.inputQueue.splice(0, 1);
-    res.end(data);
+    console.log("Dequeued input.");
+    res.end(data[0]);
 });
 app.listen("25563");

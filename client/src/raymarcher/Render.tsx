@@ -33,6 +33,7 @@ export type RenderTask = {
 
     doRenderStep: () => void,
     displayProgressImage: () => void,
+    displayRawProgressImage: () => void,
     isRenderDone: () => boolean,
 
     glState: RenderTaskGLState
@@ -214,8 +215,17 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
             twgl.drawBufferInfo(gl, this.glState.vao);
         },
 
+        displayRawProgressImage() {
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+            gl.useProgram(this.glState.shader.blit.program);
+            twgl.setUniforms(this.glState.shader.blit, {
+                inputImage: this.glState.fb.curr.attachments[0]
+            });
+            twgl.drawBufferInfo(gl, this.glState.vao);
+        },
+
         isRenderDone() {
-            return false;
+            return this.samplesSoFar >= this.samples;
         },
 
         isError: false

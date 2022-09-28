@@ -72,10 +72,14 @@ app.post("/enqueue-output/:joincode/:frameid", getRenderGroup, bodyParser.raw(),
     });
 });
 
-app.post("/dequeue-output/:joincode", getRenderGroup, (req, res) => {
+app.post("/dequeue-output/:joincode", getRenderGroup, bodyParser.text(), (req, res) => {
     const s: RenderGroupState = rgs(req);
     if (s.outputQueue.length == 0) {
         res.status(404).end("outputQueue is empty.");
+        return;
+    }
+    if (s.secret != req.body) {
+        res.status(401).end("Cannot dequeue output: Unauthorized.");
         return;
     }
     const data = s.outputQueue.splice(0, 1);
@@ -83,19 +87,26 @@ app.post("/dequeue-output/:joincode", getRenderGroup, (req, res) => {
 });
 
 
-app.post("/enqueue-input/:joincode/:frameid", getRenderGroup, bodyParser.text(), (req, res) => {
+app.post("/enqueue-input/:joincode/:frameid", getRenderGroup, bodyParser.json(), (req, res) => {
     const s: RenderGroupState = rgs(req);
-    s.inputQueue.push(req.body);
+    // if (s.secret != req.body) {
+    //     res.status(401).end("Cannot dequeue output: Unauthorized.");
+    //     return;
+    // }
+    console.log("Enqueued input:", JSON.stringify(req.body));
+    s.inputQueue.push(JSON.stringify(req.body));
+    res.end();
 });
 
 app.post("/dequeue-input/:joincode", getRenderGroup, (req, res) => {
     const s: RenderGroupState = rgs(req);
-    if (s.outputQueue.length == 0) {
+    if (s.inputQueue.length == 0) {
         res.status(404).end("inputQueue is empty.");
         return;
     }
     const data = s.inputQueue.splice(0, 1);
-    res.end(data);
+    console.log("Dequeued input.");
+    res.end(data[0]);
 });
 
 app.listen("25563");
