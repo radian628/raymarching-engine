@@ -87,7 +87,7 @@ export function ConsumerMainCanvas(props: {
                 rotation: m4.identity(),
                 dimensions: [512, 512],
                 partitions: [1, 1],
-                samples: 100,
+                samples: 10,
                 canvas: elem
             });
         }

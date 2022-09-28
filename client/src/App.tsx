@@ -63,6 +63,7 @@ function App() {
                 mode: "cors",
                 method: "POST",
                 headers: {
+                    "Access-Control-Allow-Origin": "*",
                     "Content-Type": "text/plain"
                 }
             })).blob();
@@ -70,7 +71,7 @@ function App() {
             if (blob.type == "image/png") {
                 const img = new Image();
                 //img.src = URL.createObjectURL(blob);
-                await renderStateRef.current.merge(URL.createObjectURL(blob), 100);
+                await renderStateRef.current.merge(URL.createObjectURL(blob), 10);
                 //URL.revokeObjectURL(img.src);
             }
 

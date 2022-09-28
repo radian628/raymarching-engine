@@ -258,38 +258,53 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                 img.src = url;
                 img.crossOrigin = "anonymous";
                 console.log(img.complete);
-                const loadfn = () => {
-                    twgl.createTexture(gl, { src: img, target: gl.TEXTURE_2D, minMag: gl.NEAREST }, (err: any, tex: WebGLTexture) => {
-                        console.log(err, "reached create tex callback", tex);
-                        // this.doRenderStep();
-                        // this.displayProgressImage();
-                        gl.viewport(0, 0, ...this.dimensions);
+                const loadfn = (canv: HTMLCanvasElement) => {
+                    // const tex = twgl.createTexture(gl, { src: canv, target: gl.TEXTURE_2D, minMag: gl.NEAREST }, (err: any, tex: WebGLTexture) => {
+                    //     console.log(err, "reached create tex callback", tex);
+                    //     // this.doRenderStep();
+                    //     // this.displayProgressImage();
+                       
+                    // });
+                    setTimeout(() => {
+
+                        const tex = gl.createTexture();
+                        gl.bindTexture(gl.TEXTURE_2D, tex);
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, canv);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+                        gl.viewport(0, 0, 512, 512);
                         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+                        ///gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
                         // gl.useProgram(this.glState.shader.merge.program);
-                        // twgl.setUniforms({
-                        //     color1: this.glState.fb.curr.attachments[0],
-                        //     color2: tex,
-                        //     factor: (samples > this.samplesSoFar) ? (1 - this.samplesSoFar / samples) : (samples / this.samplesSoFar)
-                        // });
-                        // twgl.drawBufferInfo(gl, this.glState.vao);
-                                
-                        gl.useProgram(this.glState.shader.blit.program);
-                        twgl.setUniforms(this.glState.shader.blit, {
-                            inputImage: tex
+                        twgl.setUniforms(this.glState.shader.merge, {
+                            color1: this.glState.fb.curr.attachments[0],
+                            color2: tex,
+                            factor: (samples > this.samplesSoFar) ? (1 - this.samplesSoFar / samples) : (samples / this.samplesSoFar)
                         });
+                                
+                        // gl.useProgram(this.glState.shader.blit.program);
+                        // twgl.setUniforms(this.glState.shader.blit, {
+                        //     inputImage: tex
+                        // });
+                        twgl.setBuffersAndAttributes(gl, this.glState.shader.raymarch, bufferInfo);
                         twgl.drawBufferInfo(gl, this.glState.vao);
+                        console.log("gl error:", gl.getError());
                         this.samplesSoFar += samples;
-                        //gl.deleteTexture(tex);
+                        gl.deleteTexture(tex);
                         resolve();
-                    });
+                    }, 0);
                 };
                 img.onload = () => {    
                     const canv = document.createElement("canvas");
                     canv.width = 512;
                     canv.height = 512;
+                    //const ctx = canv.getContext("2d");
+                    //if (ctx) ctx.fillStyle = "red";
+                    //canv.getContext("2d")?.fillRect(30, 30, 200, 200);
                     canv.getContext("2d")?.drawImage(img, 0, 0);
                     document.body.appendChild(canv);
-                    loadfn();
+                    loadfn(canv);
                 }
                 // 
                 

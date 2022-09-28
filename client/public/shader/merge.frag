@@ -13,6 +13,6 @@ void main(void) {
     fragColor = mix(
         texture(color1, texcoord),
         texture(color2, texcoord),
-        1.0 + 0.0 * factor
+        factor
     );
 }

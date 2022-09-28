@@ -146,7 +146,7 @@ void main(void) {
     // loop over reflections
     for (int i = 0; i < 4; i++) {
         // march ray
-        rayPosition = castRay(rayPosition, rayDirection, 64.0);
+        rayPosition = castRay(rayPosition, rayDirection, 32.0);
 
         // accumulate light
         currentLight += currentAlbedo * sceneEmission(rayPosition);
@@ -168,21 +168,23 @@ void main(void) {
             probabilityFactor *= 1.0 - probFactor;
             currentAlbedo *= diffuseCol;
             rayPosition += 0.01 * rayDirection;
-            for (int j = 0; j < 3; j++) {
-                vec3 newDir = sphereSample();
-                rayDirection = newDir;
-                float pathLength = invExpDist(random(rayPosition.yz), 30.0);
-                vec3 lastRayPosition = rayPosition;
-                rayPosition = castRay(rayPosition, rayDirection, 32.0);
-                if (distance(rayPosition, lastRayPosition) > pathLength) {
-                    rayPosition = lastRayPosition + rayDirection * pathLength;
-                }
-                if (sdf(rayPosition) > -0.01) {
-                    rayPosition = rayPosition + 0.02 * sceneNormal(rayPosition, 0.0001);
-                    break;
-                }
-            }
-            //rayDirection = sign(dot(normal, newDir)) * newDir;
+            // for (int j = 0; j < 3; j++) {
+            //     vec3 newDir = sphereSample();
+            //     rayDirection = newDir;
+            //     float pathLength = invExpDist(random(rayPosition.yz), 30.0);
+            //     vec3 lastRayPosition = rayPosition;
+            //     rayPosition = castRay(rayPosition, rayDirection, 16.0);
+            //     if (distance(rayPosition, lastRayPosition) > pathLength) {
+            //         rayPosition = lastRayPosition + rayDirection * pathLength;
+            //     }
+            //     if (sdf(rayPosition) > -0.01) {
+            //         rayPosition = rayPosition + 0.02 * sceneNormal(rayPosition, 0.0001);
+            //         break;
+            //     }
+            // }
+
+            vec3 newDir = sphereSample();
+            rayDirection = sign(dot(normal, newDir)) * newDir;
 
         // specular reflection
         } else {

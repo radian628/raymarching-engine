@@ -9,4 +9,5 @@ out vec4 fragColor;
 
 void main(void) {
     fragColor = texture(inputImage, texcoord);
+    //vec4(0.75);
 }
