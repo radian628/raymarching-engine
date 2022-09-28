@@ -23,6 +23,7 @@ export function ConsumerMainCanvas(props: {
 
     const animFrameRef = useRef<number | undefined>();
 
+    // controls loop
     const animate = () => {
         if (props.renderStateRef.current) {
             //rops.renderStateRef.current.doRenderStep();
@@ -60,6 +61,13 @@ export function ConsumerMainCanvas(props: {
         animFrameRef.current = requestAnimationFrame(animate);
     }
 
+    // init controls loop
+    useEffect(() => {
+        animFrameRef.current = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(animFrameRef.current as number);
+    }, []);
+
+    // create render tasks when render settings ever changes
     useEffect(() => {
         const elem = canvasRef.current;
         if (!elem) return;
@@ -72,11 +80,7 @@ export function ConsumerMainCanvas(props: {
         })()
     }, [props.renderSettings]);
 
-    useEffect(() => {
-        animFrameRef.current = requestAnimationFrame(animate);
-        return () => cancelAnimationFrame(animFrameRef.current as number);
-    }, []);
-
+    // init render settings at the beginning to its initial values
     useEffect(() => {
         const elem = canvasRef.current;
         if (!elem) return;
@@ -93,6 +97,7 @@ export function ConsumerMainCanvas(props: {
         }
     });
 
+    // pointer lock
     useEffect(() => {
         const elem = canvasRef.current;
         if (!elem) return;

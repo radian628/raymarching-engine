@@ -264,7 +264,7 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                 img.src = url;
                 img.crossOrigin = "anonymous";
                 console.log(img.complete);
-                const loadfn = (canv: HTMLCanvasElement) => {
+                const loadfn = (canv: HTMLImageElement) => {
                     // const tex = twgl.createTexture(gl, { src: canv, target: gl.TEXTURE_2D, minMag: gl.NEAREST }, (err: any, tex: WebGLTexture) => {
                     //     console.log(err, "reached create tex callback", tex);
                     //     // this.doRenderStep();
@@ -304,24 +304,9 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                         resolve();
                     }, 0);
                 };
-                img.onload = () => {    
-                    const canv = document.createElement("canvas");
-                    canv.width = 512;
-                    canv.height = 512;
-                    //const ctx = canv.getContext("2d");
-                    //if (ctx) ctx.fillStyle = "red";
-                    //canv.getContext("2d")?.fillRect(30, 30, 200, 200);
-                    canv.getContext("2d")?.drawImage(img, 0, 0);
-                    document.body.appendChild(canv);
-                    loadfn(canv);
+                img.onload = () => {
+                    loadfn(img);
                 }
-                // 
-                
-                // if (img.complete) {
-                //     loadfn();
-                // } else {
-                //     img.onload = loadfn;
-                // } 
             });
         },
 
