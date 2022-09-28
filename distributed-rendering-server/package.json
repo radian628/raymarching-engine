@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "build": "npx tsc",
+    "watch": "npx tsc --watch",
+    "start": "node build/server.mjs"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.0",
+    "express": "^4.18.1",
+    "typescript": "^4.8.4",
+    "uuid": "^9.0.0"
+  },
+  "type": "module"
+}

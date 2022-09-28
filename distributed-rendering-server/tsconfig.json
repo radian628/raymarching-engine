@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "esModuleInterop": true,
+        "module": "es6",
+        "moduleResolution": "node",
+        "outDir": "build"
+    },
+    "include": ["src/*"]
+}
