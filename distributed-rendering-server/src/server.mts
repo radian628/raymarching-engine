@@ -64,26 +64,25 @@ app.post("/create-render-group/:joincode", (req, res) => {
     res.end(secret);
 });
 
-app.post("/enqueue-output/:joincode/:frameid", getRenderGroup, bodyParser.raw(), (req, res) => {
-
+app.post("/enqueue-output/:joincode/:frameid", getRenderGroup, bodyParser.raw({ type: "image/png", limit: "50mb" }), (req, res) => {
     rgs(req).outputQueue.push({
         frameid: req.params.frameid,
         data: req.body
     });
 });
 
-app.post("/dequeue-output/:joincode", getRenderGroup, bodyParser.text(), (req, res) => {
+app.post("/dequeue-output/:joincode", getRenderGroup, bodyParser.text({ type: "text/plain" }), (req, res) => {
     const s: RenderGroupState = rgs(req);
     if (s.outputQueue.length == 0) {
         res.status(404).end("outputQueue is empty.");
         return;
     }
-    if (s.secret != req.body) {
+    if (s.secret != req.body.toString()) {
         res.status(401).end("Cannot dequeue output: Unauthorized.");
         return;
     }
     const data = s.outputQueue.splice(0, 1);
-    res.end(data[0].data);
+    res.contentType("image/png").end(data[0].data);
 });
 
 

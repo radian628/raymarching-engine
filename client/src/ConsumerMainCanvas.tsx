@@ -12,23 +12,21 @@ document.addEventListener("keyup", e => {
 
 export function ConsumerMainCanvas(props: {
     renderSettings: RenderTaskOptions | undefined,
-    setRenderSettings: React.Dispatch<SetStateAction<RenderTaskOptions | undefined>>
+    setRenderSettings: React.Dispatch<SetStateAction<RenderTaskOptions | undefined>>,
+    renderStateRef: React.MutableRefObject<RenderTask | undefined>
 }) {
     
     const canvasRef = createRef<HTMLCanvasElement>();
 
-    const renderStateRef = useRef<RenderTask | undefined>(undefined);
-
-    //const [renderSettings, setRenderSettings] = useState<RenderTaskOptions | undefined>();
 
     const mouseDeltas = useRef<[number, number]>([0, 0]);
 
     const animFrameRef = useRef<number | undefined>();
 
     const animate = () => {
-        if (renderStateRef.current) {
-            renderStateRef.current.doRenderStep();
-            renderStateRef.current.displayProgressImage();
+        if (props.renderStateRef.current) {
+            //rops.renderStateRef.current.doRenderStep();
+            //props.renderStateRef.current.displayProgressImage();
 
             let translation = [0, 0, 0]
             if (keysDown.get("W")) translation[2] += 0.1;
@@ -70,7 +68,7 @@ export function ConsumerMainCanvas(props: {
             //@ts-ignore
             const maybeRenderTask = await createRenderTask(props.renderSettings);
             if (maybeRenderTask.isError) return;
-            renderStateRef.current = maybeRenderTask;
+            props.renderStateRef.current = maybeRenderTask;
         })()
     }, [props.renderSettings]);
 
@@ -83,14 +81,13 @@ export function ConsumerMainCanvas(props: {
         const elem = canvasRef.current;
         if (!elem) return;
 
-        //console.log("rendersettings: ", renderSettings);
         if (!props.renderSettings) {
             props.setRenderSettings({
                 position: [0, 0,0],
                 rotation: m4.identity(),
                 dimensions: [512, 512],
                 partitions: [1, 1],
-                samples: 1,
+                samples: 100,
                 canvas: elem
             });
         }
@@ -99,21 +96,13 @@ export function ConsumerMainCanvas(props: {
     useEffect(() => {
         const elem = canvasRef.current;
         if (!elem) return;
-        // function mouseMoveListener(e: MouseEvent) {
-        //     if (document.pointerLockElement === elem) {
-        //         mouseDeltas.current = [mouseDeltas.current[0] + e.movementX, mouseDeltas.current[1] + e.movementY];
-        //     }
-        // }
-
         function clickListener() {
             elem?.requestPointerLock();
         }
 
-        //elem.addEventListener("mousemove", mouseMoveListener);
         elem.addEventListener("click", clickListener);
 
         return () => {
-            //elem.removeEventListener("mousemove", mouseMoveListener);
             elem.removeEventListener("click", clickListener);
         }
     })

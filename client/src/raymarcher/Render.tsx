@@ -18,7 +18,8 @@ type RenderTaskGLState = {
     shader: {
         raymarch: twgl.ProgramInfo,
         display: twgl.ProgramInfo,
-        blit: twgl.ProgramInfo
+        blit: twgl.ProgramInfo,
+        merge: twgl.ProgramInfo
     },
 }
 
@@ -35,6 +36,8 @@ export type RenderTask = {
     displayProgressImage: () => void,
     displayRawProgressImage: () => void,
     isRenderDone: () => boolean,
+    getFinalImage: () => Promise<Blob>,
+    merge: (url: string, samples: number) => Promise<void>,
 
     glState: RenderTaskGLState
 };
@@ -148,6 +151,11 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
         await fetchText("./shader/raymarcher.vert"),
         await fetchText("./shader/raymarcher.frag"),
     ]);
+
+    const mergeProgram = memoizedCreateProgramInfo(gl, [
+        await fetchText("./shader/merge.vert"),
+        await fetchText("./shader/merge.frag"),
+    ]);
     
     const bufferInfo = twgl.createBufferInfoFromArrays(gl, vertexBuffers);
     const vao = twgl.createVertexArrayInfo(gl, raymarchProgram, bufferInfo);
@@ -171,6 +179,7 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                 raymarch: raymarchProgram,
                 display: displayProgram,
                 blit: blitProgram,
+                merge: mergeProgram
             },
             fb: {
                 prev: getPrevFramebuffer(gl, ...options.dimensions),
@@ -226,6 +235,70 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
 
         isRenderDone() {
             return this.samplesSoFar >= this.samples;
+        },
+
+        async getFinalImage() {
+            return new Promise((resolve, reject) => {
+                this.displayRawProgressImage();
+                gl.flush();
+                options.canvas.toBlob(blob => {
+                    if (blob) {
+                        resolve(blob);
+                        return;
+                    }
+                    reject("Failed to create canvas blob.");
+                }, "image/png");
+            })
+        },
+
+        async merge(url: string, samples: number) {
+            console.log("attempting merge...");
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = url;
+                img.crossOrigin = "anonymous";
+                console.log(img.complete);
+                const loadfn = () => {
+                    twgl.createTexture(gl, { src: img, target: gl.TEXTURE_2D, minMag: gl.NEAREST }, (err: any, tex: WebGLTexture) => {
+                        console.log(err, "reached create tex callback", tex);
+                        // this.doRenderStep();
+                        // this.displayProgressImage();
+                        gl.viewport(0, 0, ...this.dimensions);
+                        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+                        // gl.useProgram(this.glState.shader.merge.program);
+                        // twgl.setUniforms({
+                        //     color1: this.glState.fb.curr.attachments[0],
+                        //     color2: tex,
+                        //     factor: (samples > this.samplesSoFar) ? (1 - this.samplesSoFar / samples) : (samples / this.samplesSoFar)
+                        // });
+                        // twgl.drawBufferInfo(gl, this.glState.vao);
+                                
+                        gl.useProgram(this.glState.shader.blit.program);
+                        twgl.setUniforms(this.glState.shader.blit, {
+                            inputImage: tex
+                        });
+                        twgl.drawBufferInfo(gl, this.glState.vao);
+                        this.samplesSoFar += samples;
+                        //gl.deleteTexture(tex);
+                        resolve();
+                    });
+                };
+                img.onload = () => {    
+                    const canv = document.createElement("canvas");
+                    canv.width = 512;
+                    canv.height = 512;
+                    canv.getContext("2d")?.drawImage(img, 0, 0);
+                    document.body.appendChild(canv);
+                    loadfn();
+                }
+                // 
+                
+                // if (img.complete) {
+                //     loadfn();
+                // } else {
+                //     img.onload = loadfn;
+                // } 
+            });
         },
 
         isError: false

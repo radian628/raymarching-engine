@@ -3,18 +3,25 @@ import { RenderTask, RenderTaskOptions, createRenderTask } from "./raymarcher/Re
 
 export function ProducerMainCanvas(props: {
     renderSettings: RenderTaskOptions | undefined,
-    setRenderSettings: React.Dispatch<SetStateAction<RenderTaskOptions | undefined>>
+    setRenderSettings: React.Dispatch<SetStateAction<RenderTaskOptions | undefined>>,
+    onImageComplete: (img: Promise<Blob>) => void,
+    renderStateRef: React.MutableRefObject<RenderTask | undefined>
 }) {
     const canvasRef = createRef<HTMLCanvasElement>();
-
-    const renderStateRef = useRef<RenderTask | undefined>(undefined);
 
     const animFrameRef = useRef<number | undefined>();
 
     const animate = () => {
-        if (renderStateRef.current) {
-            renderStateRef.current.doRenderStep();
-            renderStateRef.current.displayProgressImage();
+        if (props.renderStateRef.current) {
+            if (props.renderStateRef.current.isRenderDone()) {
+                console.log("renderfinished2")
+                props.onImageComplete(props.renderStateRef.current.getFinalImage());
+                props.setRenderSettings(undefined);
+                props.renderStateRef.current = undefined;
+            } else {
+                props.renderStateRef.current.doRenderStep();
+                props.renderStateRef.current.displayProgressImage();
+            }
         }
         animFrameRef.current = requestAnimationFrame(animate);
     }
@@ -29,18 +36,13 @@ export function ProducerMainCanvas(props: {
         if (!elem) return;
         if (!props.renderSettings) return;
         (async () => {
-            // if (renderStateRef.current) {
-            //     renderStateRef.current.displayRawProgressImage();
-            // }
             //@ts-ignore
             const maybeRenderTask = await createRenderTask({
                 ...props.renderSettings,
-                rotation: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
                 canvas: elem
             });
-            console.log(maybeRenderTask);
             if (maybeRenderTask.isError) return;
-            renderStateRef.current = maybeRenderTask;
+            props.renderStateRef.current = maybeRenderTask;
         })()
     }, [props.renderSettings]);
     
