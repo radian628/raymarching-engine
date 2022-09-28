@@ -3,7 +3,8 @@
         "esModuleInterop": true,
         "module": "es6",
         "moduleResolution": "node",
-        "outDir": "build"
+        "outDir": "build",
+        "strict": true
     },
     "include": ["src/*"]
 }

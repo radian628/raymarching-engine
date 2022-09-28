@@ -1,6 +1,7 @@
 import express, { NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import bodyParser from "body-parser";
+import cors from "cors";
 
 const app = express();
 
@@ -20,32 +21,38 @@ app.get("/", (req, res) => {
     res.send(`<!DOCTYPE html>
 <html>
     <head>
-        <meta http-equiv="Content-Security-Policy" content="default-src *">
     </head>
     <body>
+        <p>You've reached the renderfarm!</p>
     </body>
 </html>
     `)
-})
+});
+
+app.use(cors());
 
 function getRenderGroup(req: express.Request, res: express.Response, next: NextFunction)
     : req is express.Request & { renderGroup: RenderGroupState } {
     if (!renderGroups.has(req.params.joincode)) {
-        res.status(400).send("Failed to find render group.");
-        return;
+        res.status(400).end("Failed to find render group.");
+        return false;
     }
+    //@ts-ignore
     req["renderGroup"] = renderGroups.get(req.params.joincode) as RenderGroupState;
     next();
+    return true;
 }
 
 function rgs(req: express.Request) {
+    //@ts-ignore
     return req["renderGroup"] as RenderGroupState;
 }
 
 const renderGroups = new Map<string, RenderGroupState>();
 app.post("/create-render-group/:joincode", (req, res) => {
+    console.log("Create render group attempt.");
     if (renderGroups.has(req.params.joincode)) {
-        res.status(400).send("Failed to create render group.");
+        res.status(400).end("Failed to create render group.");
         return;
     }
     const secret = uuidv4();
@@ -54,7 +61,7 @@ app.post("/create-render-group/:joincode", (req, res) => {
         outputQueue: [],
         inputQueue: []
     });
-    res.send(secret);
+    res.end(secret);
 });
 
 app.post("/enqueue-output/:joincode/:frameid", getRenderGroup, bodyParser.raw(), (req, res) => {
@@ -68,11 +75,11 @@ app.post("/enqueue-output/:joincode/:frameid", getRenderGroup, bodyParser.raw(),
 app.post("/dequeue-output/:joincode", getRenderGroup, (req, res) => {
     const s: RenderGroupState = rgs(req);
     if (s.outputQueue.length == 0) {
-        res.status(404).send("outputQueue is empty.");
+        res.status(404).end("outputQueue is empty.");
         return;
     }
     const data = s.outputQueue.splice(0, 1);
-    res.send(data[0].data);
+    res.end(data[0].data);
 });
 
 
@@ -84,11 +91,11 @@ app.post("/enqueue-input/:joincode/:frameid", getRenderGroup, bodyParser.text(),
 app.post("/dequeue-input/:joincode", getRenderGroup, (req, res) => {
     const s: RenderGroupState = rgs(req);
     if (s.outputQueue.length == 0) {
-        res.status(404).send("inputQueue is empty.");
+        res.status(404).end("inputQueue is empty.");
         return;
     }
     const data = s.inputQueue.splice(0, 1);
-    res.send(data);
+    res.end(data);
 });
 
 app.listen("25563");
