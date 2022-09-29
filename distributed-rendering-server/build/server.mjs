@@ -42,6 +42,7 @@ app.post("/enqueue-output/:joincode/:frameid", getRenderGroup, bodyParser.raw({ 
         frameid: req.params.frameid,
         data: req.body
     });
+    res.end();
 });
 app.post("/dequeue-output/:joincode", getRenderGroup, bodyParser.text({ type: "text/plain" }), function (req, res) {
     var s = rgs(req);
@@ -62,9 +63,10 @@ app.post("/enqueue-input/:joincode/:frameid", getRenderGroup, bodyParser.json(),
     //     res.status(401).end("Cannot dequeue output: Unauthorized.");
     //     return;
     // }
-    console.log("Enqueued input:", JSON.stringify(req.body));
+    console.log("\n\nEnqueueing input...");
     s.inputQueue.push(JSON.stringify(req.body));
     res.end();
+    console.log("Done enqueueing input!");
 });
 app.post("/dequeue-input/:joincode", getRenderGroup, function (req, res) {
     var s = rgs(req);
@@ -75,5 +77,9 @@ app.post("/dequeue-input/:joincode", getRenderGroup, function (req, res) {
     var data = s.inputQueue.splice(0, 1);
     console.log("Dequeued input.");
     res.end(data[0]);
+});
+app.post("/input-queue-length/:joincode", getRenderGroup, function (req, res) {
+    var s = rgs(req);
+    res.end(s.inputQueue.length.toString());
 });
 app.listen("25563");

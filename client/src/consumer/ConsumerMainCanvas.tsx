@@ -91,8 +91,12 @@ export function ConsumerMainCanvas(props: {
                 rotation: m4.identity(),
                 dimensions: [512, 512],
                 partitions: [1, 1],
-                samples: 10,
-                canvas: elem
+                samples: 100,
+                canvas: elem,
+
+                dofAmount: 0.01,
+                reflections: 5,
+                raymarchingSteps: 96
             });
         }
     });

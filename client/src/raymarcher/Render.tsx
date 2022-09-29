@@ -32,6 +32,10 @@ export type RenderTask = {
     position: vec3,
     rotation: m4.Mat4,
 
+    dofAmount: number,
+    reflections: number,
+    raymarchingSteps: number,
+
     doRenderStep: () => void,
     displayProgressImage: () => void,
     displayRawProgressImage: () => void,
@@ -50,6 +54,10 @@ export type RenderTaskOptions = {
     partitions: vec2,
     samples: number,
     canvas: HTMLCanvasElement,
+
+    dofAmount: number,
+    reflections: number,
+    raymarchingSteps: number,
 }
 
 export type SerializableRenderTaskOptions = {
@@ -198,7 +206,11 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                 previousColor: this.glState.fb.prev.attachments[0],
                 randNoise: [Math.random(), Math.random()],
                 position: this.position,
-                rotation: this.rotation
+                rotation: this.rotation,
+
+                dofAmount: this.dofAmount,
+                reflections: this.reflections,
+                raymarchingSteps: this.raymarchingSteps
             })
             twgl.setBuffersAndAttributes(gl, this.glState.shader.raymarch, bufferInfo);
             twgl.drawBufferInfo(gl, this.glState.vao);
@@ -275,11 +287,11 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
 
                         const tex = gl.createTexture();
                         gl.bindTexture(gl.TEXTURE_2D, tex);
-                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, canv);
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, ...options.dimensions, 0, gl.RGBA, gl.UNSIGNED_BYTE, canv);
                         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
                         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-                        gl.viewport(0, 0, 512, 512);
+                        gl.viewport(0, 0, ...options.dimensions);
                         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.glState.fb.curr.framebuffer);
                         ///gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
                         gl.useProgram(this.glState.shader.merge.program);

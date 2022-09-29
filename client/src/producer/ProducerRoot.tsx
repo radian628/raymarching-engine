@@ -25,7 +25,7 @@ export function ProducerRoot() {
             if (!queueDataReq.ok) return;
             const queueDataJSON = await queueDataReq.json();
             setRenderSettings(queueDataJSON);
-        }, 1500);
+        }, 100);
     }, []);
     
 
@@ -37,9 +37,7 @@ export function ProducerRoot() {
             renderSettings={renderSettings}
             setRenderSettings={setRenderSettings}
             onImageComplete={async img => {    
-                console.log("Render finished!")
                 const imgloaded = await img;
-                console.log("loaded blob", imgloaded);
                 await fetch(`${server}/enqueue-output/${joincode}/0`, {
                     body: imgloaded,
                     mode: "cors",

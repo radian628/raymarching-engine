@@ -2,6 +2,7 @@ import { DistRenderConsumer, DistRenderConsumerState } from "./DistRenderConsume
 import { ConsumerMainCanvas } from "./ConsumerMainCanvas";
 import { useEffect, useRef, useState } from "react";
 import { RenderTask, RenderTaskOptions } from "../raymarcher/Render";
+import { Controls } from "./Controls";
 
 export function ConsumerRoot() {
     const [renderSettings, setRenderSettings] = useState<RenderTaskOptions | undefined>();
@@ -15,27 +16,36 @@ export function ConsumerRoot() {
     });
     const distRenderOptionsRef = useRef(distRenderOptions);
     distRenderOptionsRef.current = distRenderOptions;
-
-    const isProducer = (new URLSearchParams(window.location.search)).get("producer") !== null; 
-
-    const joincode = (new URLSearchParams(window.location.search)).get("joincode");
-    const server = (new URLSearchParams(window.location.search)).get("server"); 
     const renderStateRef = useRef<RenderTask | undefined>(undefined);
 
     // consumer loop
     useEffect(() => {
         setInterval(async () => {
-            if (isProducer) return;
             if (!renderSettingsRef.current || !distRenderOptionsRef.current.server) return;
-            const settingsString = (JSON.stringify({ ...renderSettingsRef.current, rotation: Array.from(renderSettingsRef.current.rotation), canvas: undefined }));
-            await fetch(`${distRenderOptionsRef.current.server}/enqueue-input/${distRenderOptionsRef.current.joincode}/0`, {
-                body: settingsString,
-                mode: "cors",
+
+            const queueLengthStr = await (await fetch(`${distRenderOptionsRef.current.server
+            }/input-queue-length/${distRenderOptionsRef.current.joincode}`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                }
-            });
+                mode: "cors"
+            })).text();
+            const queueLength = Number(queueLengthStr);
+            console.log(queueLengthStr, queueLength);
+
+            if (queueLength < 4) {
+                const settingsString = (JSON.stringify({ ...renderSettingsRef.current, rotation: Array.from(renderSettingsRef.current.rotation), canvas: undefined }));
+                console.log("\n\n trying to enqueue input...")
+                await fetch(`${distRenderOptionsRef.current.server}/enqueue-input/${distRenderOptionsRef.current.joincode}/0`, {
+                    body: settingsString,
+                    mode: "cors",
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                });
+                console.log("successfully enqueued input!!!!!");
+            } else {
+                console.log("Queue is too long--- not enqueueing input.");
+            }
 
             if (!renderStateRef.current) return;
             let blob = await (await fetch(`${distRenderOptionsRef.current.server}/dequeue-output/${distRenderOptionsRef.current.joincode}`, {
@@ -49,14 +59,13 @@ export function ConsumerRoot() {
             })).blob();
 
             if (blob.type == "image/png") {
-                const img = new Image();
-                //img.src = URL.createObjectURL(blob);
-                await renderStateRef.current.merge(URL.createObjectURL(blob), 10);
-                //URL.revokeObjectURL(img.src);
+                const url = URL.createObjectURL(blob);
+                await renderStateRef.current.merge(url, 100);
+                URL.revokeObjectURL(url);
             }
 
             console.log(blob);
-        }, 1500);
+        }, 100);
     }, []);
 
     // UI
@@ -67,6 +76,10 @@ export function ConsumerRoot() {
             setRenderSettings={setRenderSettings}
             renderStateRef={renderStateRef}
         ></ConsumerMainCanvas>
+        <Controls
+            renderSettings={renderSettings}
+            setRenderSettings={setRenderSettings}
+        ></Controls>
         <DistRenderConsumer
             onReceiveImage={img => {}}
             consumerState={distRenderOptions}

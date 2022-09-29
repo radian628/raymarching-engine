@@ -9,6 +9,12 @@ uniform vec2 randNoise;
 uniform vec3 position;
 uniform mat4 rotation;
 
+
+uniform float dofAmount;
+uniform float reflections;
+uniform float raymarchingSteps;
+
+
 float random (vec2 st) {
     return fract(sin(dot(st.xy,
                          vec2(12.9898,78.233)))*
@@ -130,7 +136,7 @@ void main(void) {
         random(randNoise + texcoord),
         random(randNoise + texcoord * 2.0),
         random(randNoise + texcoord * 3.0)
-    ) * 0.0;
+    ) * dofAmount;
     vec3 rayPosition = position + dofOffset;
     vec2 randomDirectionOffset = vec2(random(randNoise + texcoord.xy), random(randNoise + texcoord.xy * 2.0))
         / vec2(textureSize(previousColor, 0)) * 1.0;
@@ -144,9 +150,9 @@ void main(void) {
     float probabilityFactor = 1.0;
 
     // loop over reflections
-    for (int i = 0; i < 4; i++) {
+    for (float i = 0.0; i < reflections; i++) {
         // march ray
-        rayPosition = castRay(rayPosition, rayDirection, 32.0);
+        rayPosition = castRay(rayPosition, rayDirection, reflections);
 
         // accumulate light
         currentLight += currentAlbedo * sceneEmission(rayPosition);
