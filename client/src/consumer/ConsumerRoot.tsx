@@ -61,6 +61,7 @@ export function ConsumerRoot() {
             if (blob.type == "image/png") {
                 const url = URL.createObjectURL(blob);
                 await renderStateRef.current.merge(url, 100);
+                renderStateRef.current.displayProgressImage();
                 URL.revokeObjectURL(url);
             }
 

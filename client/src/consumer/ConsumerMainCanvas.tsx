@@ -27,7 +27,6 @@ export function ConsumerMainCanvas(props: {
     const animate = () => {
         if (props.renderStateRef.current) {
             //props.renderStateRef.current.doRenderStep();
-            props.renderStateRef.current.displayProgressImage();
 
             let translation = [0, 0, 0]
             if (keysDown.get("W")) translation[2] += 0.1;
