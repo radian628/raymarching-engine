@@ -26,7 +26,7 @@ export function ConsumerMainCanvas(props: {
     // controls loop
     const animate = () => {
         if (props.renderStateRef.current) {
-            //rops.renderStateRef.current.doRenderStep();
+            //props.renderStateRef.current.doRenderStep();
             props.renderStateRef.current.displayProgressImage();
 
             let translation = [0, 0, 0]
@@ -89,14 +89,14 @@ export function ConsumerMainCanvas(props: {
             props.setRenderSettings({
                 position: [0, 0,0],
                 rotation: m4.identity(),
-                dimensions: [512, 512],
+                dimensions: [2048, 2048],
                 partitions: [1, 1],
                 samples: 100,
                 canvas: elem,
 
                 dofAmount: 0.01,
                 reflections: 5,
-                raymarchingSteps: 96
+                raymarchingSteps: 128
             });
         }
     });

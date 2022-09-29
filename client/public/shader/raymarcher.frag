@@ -152,7 +152,7 @@ void main(void) {
     // loop over reflections
     for (float i = 0.0; i < reflections; i++) {
         // march ray
-        rayPosition = castRay(rayPosition, rayDirection, reflections);
+        rayPosition = castRay(rayPosition, rayDirection, raymarchingSteps);
 
         // accumulate light
         currentLight += currentAlbedo * sceneEmission(rayPosition);
