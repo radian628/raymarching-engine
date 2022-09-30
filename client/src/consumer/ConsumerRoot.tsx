@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { RenderTask, RenderTaskOptions } from "../raymarcher/Render";
 import { Controls } from "./Controls";
 
+export type OtherSettings = {
+    fitCanvasToScreen: boolean;
+    autoRescaleCanvas: boolean
+}
+
 export function ConsumerRoot() {
     const [renderSettings, setRenderSettings] = useState<RenderTaskOptions | undefined>();
     const renderSettingsRef = useRef(renderSettings);
@@ -17,6 +22,30 @@ export function ConsumerRoot() {
     const distRenderOptionsRef = useRef(distRenderOptions);
     distRenderOptionsRef.current = distRenderOptions;
     const renderStateRef = useRef<RenderTask | undefined>(undefined);
+
+    const [otherSettings, setOtherSettings] = useState<OtherSettings>({
+        fitCanvasToScreen: true,
+        autoRescaleCanvas: false
+    });
+
+    useEffect(() => {
+        const resizeListener = () => {
+            if (otherSettings.autoRescaleCanvas) {
+                setRenderSettings(oldRenderSettings => {
+                    if (!oldRenderSettings) return undefined;
+                    return {
+                        ...oldRenderSettings,
+                        dimensions: [window.innerWidth, window.innerHeight]
+                    };
+                });
+            }
+        }
+
+        window.addEventListener("resize", resizeListener);
+        return () => {
+            window.removeEventListener("resize", resizeListener);
+        }
+    });
 
     // consumer loop
     useEffect(() => {
@@ -70,22 +99,31 @@ export function ConsumerRoot() {
     }, []);
 
     // UI
+    console.log("rendersettings in consumerroot", renderSettings?.dimensions);
   return (
     <div>
         <ConsumerMainCanvas
             renderSettings={renderSettings}
             setRenderSettings={setRenderSettings}
             renderStateRef={renderStateRef}
+            style={{
+                width: otherSettings.fitCanvasToScreen ? "100vw" : "",
+                height: otherSettings.fitCanvasToScreen ? "100vh" : "",
+            }}
         ></ConsumerMainCanvas>
-        <Controls
-            renderSettings={renderSettings}
-            setRenderSettings={setRenderSettings}
-        ></Controls>
-        <DistRenderConsumer
-            onReceiveImage={img => {}}
-            consumerState={distRenderOptions}
-            setConsumerState={setDistRenderOptions}
-        ></DistRenderConsumer>
+        <div id="controls-root">
+            <Controls
+                renderSettings={renderSettings}
+                setRenderSettings={setRenderSettings}
+                otherSettings={otherSettings}
+                setOtherSettings={setOtherSettings}
+            ></Controls>
+            <DistRenderConsumer
+                onReceiveImage={img => {}}
+                consumerState={distRenderOptions}
+                setConsumerState={setDistRenderOptions}
+            ></DistRenderConsumer>
+        </div>
     </div>
   )
 }

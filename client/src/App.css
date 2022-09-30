@@ -1,41 +1,51 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+* {
+    font-family: sans-serif;
+    color: white;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+body {
+    background-color: black;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+#controls-root {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    height: 100vh;
+    background-color: #00000088;
+    font-size: 12px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+#controls-root input {
+    background: black;
+    margin-left: 5px;
+    border: 1px solid #666666;
+    margin-bottom: 2px;
+    padding: 0px;
+    padding-left: 1px;
 }
 
-.card {
-  padding: 2em;
+
+#controls-root button {
+    background: #555555;
+    border: 1px solid #666666;
+    margin-bottom: 2px;
+    padding: 0px;
+    padding-left: 1px;
+    cursor: pointer;
+    transition: background-color 0.25s;
+}
+#controls-root button:hover {
+    background: #333333;
+    border: 1px solid #666666;
+    margin-bottom: 2px;
+    padding: 0px;
+    padding-left: 1px;
+    cursor: pointer;
 }
 
-.read-the-docs {
-  color: #888;
+#main-canvas {
+    position: absolute;
+    top: 0px;
+    right: 0px;
 }

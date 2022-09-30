@@ -11,8 +11,16 @@ uniform mat4 rotation;
 
 
 uniform float dofAmount;
+uniform float dofFocalPlaneDistance;
+
+
 uniform float reflections;
 uniform float raymarchingSteps;
+uniform float indirectLightingRaymarchingSteps;
+
+uniform float aspect;
+
+uniform float fogDensity;
 
 
 float random (vec2 st) {
@@ -120,7 +128,9 @@ vec3 sceneNormal(vec3 position, float delta) {
 // ray marching function
 vec3 castRay(vec3 rayPosition, vec3 rayDirection, float steps) {
     for (float i = 0.0; i < steps; i++) {
-        rayPosition = rayPosition + rayDirection * sdf(rayPosition);
+        float sdfNow = sdf(rayPosition);
+        rayPosition = rayPosition + rayDirection * sdfNow;
+        if (sdfNow < 0.0001) return rayPosition;
     }
     return rayPosition;
 }
@@ -140,8 +150,8 @@ void main(void) {
     vec3 rayPosition = position + dofOffset;
     vec2 randomDirectionOffset = vec2(random(randNoise + texcoord.xy), random(randNoise + texcoord.xy * 2.0))
         / vec2(textureSize(previousColor, 0)) * 1.0;
-    vec3 rayDirectionNotNormalized = (rotation * vec4(texcoord.xy * 2.0 - 1.0 + randomDirectionOffset, 1.0, 0.0)).xyz;
-    vec3 rayDirectionGoal = rayDirectionNotNormalized * 5.0;
+    vec3 rayDirectionNotNormalized = (rotation * vec4((texcoord.xy * 2.0 - 1.0) * vec2(aspect, 1.0) + randomDirectionOffset, 1.0, 0.0)).xyz;
+    vec3 rayDirectionGoal = rayDirectionNotNormalized * dofFocalPlaneDistance;
     vec3 rayDirection = normalize(rayDirectionGoal - dofOffset);
 
     // parameters that are accumulated across reflections
@@ -152,7 +162,15 @@ void main(void) {
     // loop over reflections
     for (float i = 0.0; i < reflections; i++) {
         // march ray
-        rayPosition = castRay(rayPosition, rayDirection, raymarchingSteps);
+        vec3 oldRayPosition = rayPosition;
+        rayPosition = castRay(rayPosition, rayDirection, (i == 0.0) ? raymarchingSteps : indirectLightingRaymarchingSteps);
+
+        float pathLength = invExpDist(random(rayPosition.yz), fogDensity);
+
+        if (distance(oldRayPosition, rayPosition) > pathLength) {
+            rayPosition = oldRayPosition + pathLength * rayDirection;
+            rayDirection = sphereSample();
+        }
 
         // accumulate light
         currentLight += currentAlbedo * sceneEmission(rayPosition);

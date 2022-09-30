@@ -1,4 +1,4 @@
-import { createRef, SetStateAction, useEffect, useMemo, useRef, useState } from "react"
+import React, { createRef, SetStateAction, useEffect, useMemo, useRef, useState } from "react"
 import { m4, v3 } from "twgl.js";
 import { createRenderTask, RenderTask, RenderTaskOptions, vec3 } from "../raymarcher/Render"
 
@@ -10,11 +10,17 @@ document.addEventListener("keyup", e => {
     keysDown.set(e.key.toUpperCase(), false);
 });
 
+function noUndefined<T extends {}>(obj: T): { [K in keyof T]: Exclude<T[K], undefined> } {
+    //@ts-ignore
+    return Object.fromEntries(Object.entries(obj).filter(([k, v]) => v !== undefined));
+} 
+
+
 export function ConsumerMainCanvas(props: {
     renderSettings: RenderTaskOptions | undefined,
     setRenderSettings: React.Dispatch<SetStateAction<RenderTaskOptions | undefined>>,
     renderStateRef: React.MutableRefObject<RenderTask | undefined>
-}) {
+} & React.DetailedHTMLProps<React.CanvasHTMLAttributes<HTMLCanvasElement>, HTMLCanvasElement>) {
     
     const canvasRef = createRef<HTMLCanvasElement>();
 
@@ -98,8 +104,13 @@ export function ConsumerMainCanvas(props: {
                 canvas: elem,
 
                 dofAmount: 0.01,
+                dofFocalPlaneDistance: 3,
+
                 reflections: 3,
-                raymarchingSteps: 32
+                raymarchingSteps: 32,
+                indirectLightingRaymarchingSteps: 16,
+
+                fogDensity: 0.1
             });
         }
     });
@@ -125,6 +136,8 @@ export function ConsumerMainCanvas(props: {
 
 
     return <canvas
+        {...noUndefined({ ...props, renderSettings: undefined, setRenderSettings: undefined, renderStateRef: undefined })}
+        id="main-canvas"
         width={props.renderSettings?.dimensions[0] ?? 512}
         height={props.renderSettings?.dimensions[1] ?? 512}
         ref={canvasRef}

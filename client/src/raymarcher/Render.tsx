@@ -33,8 +33,13 @@ export type RenderTask = {
     rotation: m4.Mat4,
 
     dofAmount: number,
+    dofFocalPlaneDistance: number,
+    
     reflections: number,
     raymarchingSteps: number,
+    indirectLightingRaymarchingSteps: number,
+
+    fogDensity: number,
 
     doRenderStep: () => void,
     displayProgressImage: () => void,
@@ -56,8 +61,13 @@ export type RenderTaskOptions = {
     canvas: HTMLCanvasElement,
 
     dofAmount: number,
+    dofFocalPlaneDistance: number,
+
     reflections: number,
     raymarchingSteps: number,
+    indirectLightingRaymarchingSteps: number
+
+    fogDensity: number
 }
 
 export type SerializableRenderTaskOptions = {
@@ -125,7 +135,9 @@ const getPrevFramebuffer = makeMemoizedFramebufferGetter();
 
 export async function createRenderTask(options: RenderTaskOptions): Promise<Result<RenderTask>> {
     
-    const gl = options.canvas.getContext("webgl2");
+    const gl = options.canvas.getContext("webgl2", {
+        preserveDrawingBuffer: true
+    });
     if (!gl) {
         return {
             isError: true,
@@ -209,8 +221,15 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
                 rotation: this.rotation,
 
                 dofAmount: this.dofAmount,
+                dofFocalPlaneDistance: this.dofFocalPlaneDistance,
+                
                 reflections: this.reflections,
-                raymarchingSteps: this.raymarchingSteps
+                raymarchingSteps: this.raymarchingSteps,
+                indirectLightingRaymarchingSteps: this.indirectLightingRaymarchingSteps,
+
+                aspect: this.dimensions[0] / this.dimensions[1],
+
+                fogDensity: this.fogDensity
             })
             twgl.setBuffersAndAttributes(gl, this.glState.shader.raymarch, bufferInfo);
             twgl.drawBufferInfo(gl, this.glState.vao);
