@@ -1,20 +1,49 @@
+import { useEffect, useState } from "react";
 import { RenderTaskOptions } from "../raymarcher/Render";
 
 export type KeysOfType<T, KT> = { [K in keyof T]: T[K] extends KT ? K : never }[keyof T]
 
 export function NumberInput<T>(props: {
-    key: KeysOfType<T, number>,
+    k: KeysOfType<T, number>,
     getter: T
-    setter: (t: T) => void
+    setter: (t: T) => void,
+    requiresBlurToUpdate?: boolean,
+    sensitivity?: number
 }) {
+    const [editableState, setEditableState] = useState(props.getter[props.k] as number);
+
+    function setState(val: string) {
+        props.setter({
+            ...props.getter,
+            [props.k]: Number(val)
+        });
+    }
+
+    useEffect(() => {
+        if (!props.requiresBlurToUpdate && editableState != props.getter[props.k]) {
+            setState(editableState.toString());    
+        }
+    });
+
     return <input
+        onMouseDown={e => {
+            e.currentTarget.requestPointerLock();
+        }}
+        onMouseUp={e => {
+            document.exitPointerLock();
+        }}
+        onMouseMove={e => {
+            if (document.pointerLockElement === e.currentTarget) {
+                setEditableState(editableState + e.movementX * (props.sensitivity ?? 1));
+            }
+        }}
+        onBlur={e => {
+            if (props.requiresBlurToUpdate) setState(e.currentTarget.value);
+        }}
         type="number"
-        value={props.getter[props.key] as number}
-        onInput={e => {
-            props.setter({
-                ...props.getter,
-                [props.key]: Number(e.currentTarget.value)
-            })
+        value={editableState.toPrecision(14).replace(/0+$/g, "").replace(/\.$/g, ".0")}
+        onChange={e => {
+            setEditableState(Number(e.currentTarget.value));
         }}
     ></input>
 }
@@ -50,6 +79,8 @@ export function Controls(props: {
                 });
             }}
         ></input>
-        {/* <NumberInput getter={props.renderSettings} setter={props.setRenderSettings} key=></NumberInput> */}
+        <NumberInput sensitivity={0.001} getter={props.renderSettings} setter={props.setRenderSettings} k="dofAmount"></NumberInput>
+        <NumberInput sensitivity={0.01} getter={props.renderSettings} setter={props.setRenderSettings} k="reflections"></NumberInput>
+        <NumberInput sensitivity={0.04} getter={props.renderSettings} setter={props.setRenderSettings} k="raymarchingSteps"></NumberInput>
     </div>
 }

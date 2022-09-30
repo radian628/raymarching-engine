@@ -18,6 +18,7 @@ export function ConsumerMainCanvas(props: {
     
     const canvasRef = createRef<HTMLCanvasElement>();
 
+    const pointerLockRef = useRef<boolean>(false);
 
     const mouseDeltas = useRef<[number, number]>([0, 0]);
 
@@ -26,35 +27,38 @@ export function ConsumerMainCanvas(props: {
     // controls loop
     const animate = () => {
         if (props.renderStateRef.current) {
-            //props.renderStateRef.current.doRenderStep();
+            props.renderStateRef.current.doRenderStep();
+            props.renderStateRef.current.displayProgressImage();
 
-            let translation = [0, 0, 0]
-            if (keysDown.get("W")) translation[2] += 0.1;
-            if (keysDown.get("S")) translation[2] -= 0.1;
-            if (keysDown.get("D")) translation[0] += 0.1;
-            if (keysDown.get("A")) translation[0] -= 0.1;
-            if (keysDown.get(" ")) translation[1] += 0.1;
-            if (keysDown.get("SHIFT")) translation[1] -= 0.1;
-            if (translation[0] != 0 || translation[1] != 0 || translation[2] != 0 || mouseDeltas.current[0] != 0 || mouseDeltas.current[1] != 0) {
-                const mouseDeltasCopy = [mouseDeltas.current[0], mouseDeltas.current[1]];
-                props.setRenderSettings(renderSettingsOld => {
-                    mouseDeltas.current[0] = 0;
-                    mouseDeltas.current[1] = 0;
-                    let translation2: v3.Vec3 | undefined;
-                    if (renderSettingsOld) translation2 = m4.transformDirection(renderSettingsOld.rotation, translation);
-                    return (renderSettingsOld && translation2) ? {
-                    ...renderSettingsOld,
-                    position: [
-                        renderSettingsOld.position[0] + translation2[0], 
-                        renderSettingsOld.position[1] + translation2[1], 
-                        renderSettingsOld.position[2] + translation2[2]
-                    ],
-                    rotation: m4.rotateY(m4.rotateX(
-                        renderSettingsOld.rotation,
-                        mouseDeltasCopy[1] * 0.004
-                    ),
-                    mouseDeltasCopy[0] * 0.004)
-                } : undefined});
+            if (pointerLockRef.current) {
+                let translation = [0, 0, 0]
+                if (keysDown.get("W")) translation[2] += 0.1;
+                if (keysDown.get("S")) translation[2] -= 0.1;
+                if (keysDown.get("D")) translation[0] += 0.1;
+                if (keysDown.get("A")) translation[0] -= 0.1;
+                if (keysDown.get(" ")) translation[1] += 0.1;
+                if (keysDown.get("SHIFT")) translation[1] -= 0.1;
+                if (translation[0] != 0 || translation[1] != 0 || translation[2] != 0 || mouseDeltas.current[0] != 0 || mouseDeltas.current[1] != 0) {
+                    const mouseDeltasCopy = [mouseDeltas.current[0], mouseDeltas.current[1]];
+                    props.setRenderSettings(renderSettingsOld => {
+                        mouseDeltas.current[0] = 0;
+                        mouseDeltas.current[1] = 0;
+                        let translation2: v3.Vec3 | undefined;
+                        if (renderSettingsOld) translation2 = m4.transformDirection(renderSettingsOld.rotation, translation);
+                        return (renderSettingsOld && translation2) ? {
+                        ...renderSettingsOld,
+                        position: [
+                            renderSettingsOld.position[0] + translation2[0], 
+                            renderSettingsOld.position[1] + translation2[1], 
+                            renderSettingsOld.position[2] + translation2[2]
+                        ],
+                        rotation: m4.rotateY(m4.rotateX(
+                            renderSettingsOld.rotation,
+                            mouseDeltasCopy[1] * 0.004
+                        ),
+                        mouseDeltasCopy[0] * 0.004)
+                    } : undefined});
+                }
             }
         }
         animFrameRef.current = requestAnimationFrame(animate);
@@ -88,14 +92,14 @@ export function ConsumerMainCanvas(props: {
             props.setRenderSettings({
                 position: [0, 0,0],
                 rotation: m4.identity(),
-                dimensions: [2048, 2048],
+                dimensions: [256, 256],
                 partitions: [1, 1],
                 samples: 100,
                 canvas: elem,
 
                 dofAmount: 0.01,
-                reflections: 5,
-                raymarchingSteps: 128
+                reflections: 3,
+                raymarchingSteps: 32
             });
         }
     });
@@ -107,6 +111,10 @@ export function ConsumerMainCanvas(props: {
         function clickListener() {
             elem?.requestPointerLock();
         }
+
+        document.addEventListener("pointerlockchange", e => {
+            pointerLockRef.current = document.pointerLockElement === elem;
+        })
 
         elem.addEventListener("click", clickListener);
 
