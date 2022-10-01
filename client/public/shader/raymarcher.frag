@@ -70,45 +70,82 @@ vec2 circleSample() {
 }
 
 vec3 sceneDiffuseColor(vec3 position) {
-    return vec3(mod(position / 6.0 + 3.0, 1.0) * 0.5 + vec3(0.5));
+    return vec3(0.5);
 }
 
 vec3 sceneSpecularColor(vec3 position) {
-    return vec3(0.8);//vec3(mod(position / 3.0, 1.0) * 0.5 + vec3(0.5)) * 1.0;
+    return vec3(1.0);//vec3(mod(position / 3.0, 1.0) * 0.5 + vec3(0.5)) * 1.0;
 }
 
 float sceneSpecularRoughness(vec3 position) {
-    return 0.2;
+    return 0.002;
 }
 
 float sceneSubsurfaceScattering(vec3 position) {
     return 0.2;
 }
 
-float sdfFractal(vec3 position) {
-    float subtractedGrid = 9999.9;
-    for (float x = 0.0; x < 9.0; x++) {
-        float sf = pow(0.5, x);
-        subtractedGrid = min(
-            sdfSphere(mod(position, 3.0 * sf) - 1.5 * sf, vec3(0,0,0), 1.09 * sf),
-            subtractedGrid
-        );
-    }
-    return max(
-        sdfSphere(mod(position, 6.0) - 3.0, vec3(0,0,0), 2.7),
-        -subtractedGrid
-    );
-}
-
 vec3 sceneEmission(vec3 position) {
     //float sphere1 = sdfSphere(mod(position, 6.0) - 3.0, vec3(0,0,0), 2.7);
-    vec3 idx = floor(position / 6.0);
-    return (mod(idx.x + idx.y + idx.z, 30.0) == 0.0) ? vec3(3.0) : vec3(0.0);
+    // vec3 brightColor = normalize(position) * 0.5 + 0.5;
+    // if (any(isinf(brightColor)) || any(isnan(brightColor))) {
+    //     brightColor = vec3(1,1,1);
+    // }
+    float d = dot(normalize(position), normalize(vec3(1,2,3)));
+    vec3 brightColor = (d > 0.0) ? (d * vec3(2.0, 0.1, 0.0)) : (-d * vec3(0.0, 1.0, 2.0));
+    if (length(position + 1.5) < 0.4) return vec3(100.0);
+    return (length(position) > 30.0) ? (brightColor) : vec3(0.0);
 }
+
+
+
+float sdBox( vec3 p, vec3 b )
+{
+  vec3 q = abs(p) - b;
+  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+}
+// float sdfFractal(vec3 position) {
+//     float subtractedGrid = 9999.9;
+//     for (float x = 0.0; x < 9.0; x++) {
+//         float sf = pow(0.5, x);
+//         subtractedGrid = min(
+//             sdfSphere(mod(position, 3.0 * sf) - 1.5 * sf, vec3(0,0,0), 1.09 * sf),
+//             subtractedGrid
+//         );
+//     }
+//     return max(
+//         sdfSphere(mod(position, 6.0) - 3.0, vec3(0,0,0), 2.7),
+//         -subtractedGrid
+//     );
+// }
+float sdfFractal(vec3 position) {
+    float dist = sdBox(position + vec3(1.5), vec3(1.5));
+    
+    for (float x = -1.0; x < 9.0; x++) {
+        float sf = pow(1.0 / 3.0, x);
+        dist = max(
+            -min(
+                sdBox(mod(position + 0.0*sf, 1.0 * sf) - 0.5 * sf, vec3(1.0,3.1,1.0) * sf / 6.0),
+                min(
+                    sdBox(mod(position + 0.0*sf, 1.0 * sf) - 0.5 * sf, vec3(3.1,1.0,1.0) * sf / 6.0),
+                    sdBox(mod(position + 0.0*sf, 1.0 * sf) - 0.5 * sf, vec3(1.0,1.0,3.1) * sf / 6.0)
+                )
+            ),
+            dist
+        );
+    }
+    return dist;
+}
+
+
+
 
 // scene SDF
 float sdf(vec3 position) {
-    return sdfFractal(position);
+    return min(
+        sdfFractal(position),
+        sdfSphere(position, -vec3(1.5), 0.39)
+    );
 }
 
 float invExpDist(float x, float lambda) {
@@ -130,7 +167,7 @@ vec3 castRay(vec3 rayPosition, vec3 rayDirection, float steps) {
     for (float i = 0.0; i < steps; i++) {
         float sdfNow = sdf(rayPosition);
         rayPosition = rayPosition + rayDirection * sdfNow;
-        if (sdfNow < 0.0001) return rayPosition;
+        //if (sdfNow < 0.0001) return rayPosition;
     }
     return rayPosition;
 }
@@ -165,10 +202,10 @@ void main(void) {
         vec3 oldRayPosition = rayPosition;
         rayPosition = castRay(rayPosition, rayDirection, (i == 0.0) ? raymarchingSteps : indirectLightingRaymarchingSteps);
 
-        float pathLength = invExpDist(random(rayPosition.yz), fogDensity);
+        float pathLength = invExpDist(random(randNoise + texcoord * 5.0 + i), fogDensity);
 
-        if (distance(oldRayPosition, rayPosition) > pathLength) {
-            rayPosition = oldRayPosition + pathLength * rayDirection;
+        if (distance(oldRayPosition, rayPosition) > pathLength || any(isinf(rayPosition)) || any(isnan(rayPosition))) {
+            rayPosition = oldRayPosition + min(pathLength, 1000000.0) * rayDirection;
             rayDirection = sphereSample();
         }
 
