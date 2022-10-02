@@ -13,6 +13,8 @@ uniform mat4 rotation;
 uniform float dofAmount;
 uniform float dofFocalPlaneDistance;
 
+uniform int cameraMode;
+uniform float fov;
 
 uniform float reflections;
 uniform float raymarchingSteps;
@@ -21,6 +23,7 @@ uniform float indirectLightingRaymarchingSteps;
 uniform float aspect;
 
 uniform float fogDensity;
+
 
 
 float random (vec2 st) {
@@ -93,7 +96,6 @@ vec3 sceneEmission(vec3 position) {
     // }
     float d = dot(normalize(position), normalize(vec3(1,2,3)));
     vec3 brightColor = (d > 0.0) ? (d * vec3(2.0, 0.1, 0.0)) : (-d * vec3(0.0, 1.0, 2.0));
-    if (length(position + 1.5) < 0.4) return vec3(100.0);
     return (length(position) > 30.0) ? (brightColor) : vec3(0.0);
 }
 
@@ -142,9 +144,9 @@ float sdfFractal(vec3 position) {
 
 // scene SDF
 float sdf(vec3 position) {
-    return min(
+    return max(
         sdfFractal(position),
-        sdfSphere(position, -vec3(1.5), 0.39)
+        -(dot(normalize(vec3(1,3,2)), position) + 3.0)
     );
 }
 
@@ -179,17 +181,33 @@ float schlick(float cosTheta, float n1, float n2) {
 
 void main(void) {
     // calculate ray position and direction, taking DoF into account
-    vec3 dofOffset = vec3(
-        random(randNoise + texcoord),
-        random(randNoise + texcoord * 2.0),
-        random(randNoise + texcoord * 3.0)
-    ) * dofAmount;
-    vec3 rayPosition = position + dofOffset;
+    vec3 rayDirection;
+    vec3 rayPosition;
     vec2 randomDirectionOffset = vec2(random(randNoise + texcoord.xy), random(randNoise + texcoord.xy * 2.0))
         / vec2(textureSize(previousColor, 0)) * 1.0;
-    vec3 rayDirectionNotNormalized = (rotation * vec4((texcoord.xy * 2.0 - 1.0) * vec2(aspect, 1.0) + randomDirectionOffset, 1.0, 0.0)).xyz;
-    vec3 rayDirectionGoal = rayDirectionNotNormalized * dofFocalPlaneDistance;
-    vec3 rayDirection = normalize(rayDirectionGoal - dofOffset);
+    vec2 texcoord2 = texcoord + randomDirectionOffset;
+    if (cameraMode == 0) {
+        vec3 dofOffset = vec3(
+            random(randNoise + texcoord),
+            random(randNoise + texcoord * 2.0),
+            random(randNoise + texcoord * 3.0)
+        ) * dofAmount;
+        rayPosition = position + dofOffset;
+        vec3 rayDirectionNotNormalized = (rotation * vec4((texcoord2.xy * 2.0 - 1.0) * vec2(aspect, 1.0) * tan(fov / 2.0) + randomDirectionOffset, 1.0, 0.0)).xyz;
+        vec3 rayDirectionGoal = rayDirectionNotNormalized * dofFocalPlaneDistance;
+        rayDirection = normalize(rayDirectionGoal - dofOffset);
+    } else if (cameraMode == 1) {
+        rayDirection = normalize((rotation * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+        rayPosition = position + (rotation * vec4(texcoord2.xy * vec2(aspect, 1.0) * fov, 0.0, 0.0)).xyz;
+    } else if (cameraMode == 2) {
+        vec2 angles = (texcoord2 - vec2(0.5, 0.5)) * vec2(2.0 * PI, PI);
+        rayDirection = (rotation * vec4(
+            cos(angles.x) * cos(angles.y),
+            sin(angles.y),
+            sin(angles.x) * cos(angles.y), 0.0
+        )).xyz;
+        rayPosition = position;
+    }
 
     // parameters that are accumulated across reflections
     vec3 currentAlbedo = vec3(1.0);

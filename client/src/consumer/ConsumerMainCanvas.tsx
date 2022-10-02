@@ -106,6 +106,9 @@ export function ConsumerMainCanvas(props: {
                 dofAmount: 0.01,
                 dofFocalPlaneDistance: 3,
 
+                cameraMode: 0,
+                fov: 90,
+
                 reflections: 3,
                 raymarchingSteps: 32,
                 indirectLightingRaymarchingSteps: 16,

@@ -17,30 +17,26 @@ body {
 }
 
 #controls-root input {
-    background: black;
+    background: #000000BB;
     margin-left: 5px;
-    border: 1px solid #666666;
+    border: none;
     margin-bottom: 2px;
     padding: 0px;
     padding-left: 1px;
+    border-radius: 3px;
 }
 
 
 #controls-root button {
-    background: #555555;
-    border: 1px solid #666666;
+    background: #111111;
+    border: none;
     margin-bottom: 2px;
-    padding: 0px;
-    padding-left: 1px;
+    padding: 3px;
     cursor: pointer;
     transition: background-color 0.25s;
 }
 #controls-root button:hover {
     background: #333333;
-    border: 1px solid #666666;
-    margin-bottom: 2px;
-    padding: 0px;
-    padding-left: 1px;
     cursor: pointer;
 }
 
@@ -48,4 +44,9 @@ body {
     position: absolute;
     top: 0px;
     right: 0px;
+}
+
+
+.selected-variant {
+    background: #555555 !important;
 }

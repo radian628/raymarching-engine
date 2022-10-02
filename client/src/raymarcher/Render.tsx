@@ -34,6 +34,9 @@ export type RenderTask = {
 
     dofAmount: number,
     dofFocalPlaneDistance: number,
+
+    cameraMode: number,
+    fov: number,
     
     reflections: number,
     raymarchingSteps: number,
@@ -62,6 +65,9 @@ export type RenderTaskOptions = {
 
     dofAmount: number,
     dofFocalPlaneDistance: number,
+
+    cameraMode: number,
+    fov: number,
 
     reflections: number,
     raymarchingSteps: number,
@@ -222,6 +228,9 @@ export async function createRenderTask(options: RenderTaskOptions): Promise<Resu
 
                 dofAmount: this.dofAmount,
                 dofFocalPlaneDistance: this.dofFocalPlaneDistance,
+
+                cameraMode: this.cameraMode,
+                fov: this.fov * Math.PI / 180,
                 
                 reflections: this.reflections,
                 raymarchingSteps: this.raymarchingSteps,

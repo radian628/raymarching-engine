@@ -1,3 +1,4 @@
+import React from "react";
 import { useEffect, useState } from "react";
 import { RenderTaskOptions } from "../raymarcher/Render";
 import { OtherSettings } from "./ConsumerRoot";
@@ -87,6 +88,25 @@ export function BooleanInput(props: {
             props.setter(e.currentTarget.checked);
         }}
     ></input>
+}
+
+export function ButtonSelect<T extends any[]>(props: {
+    variants: [...T],
+    variantNames: string[]
+    getter: T[number],
+    setter: (v: T[number]) => void
+}) {
+    return <React.Fragment>
+        {props.variants.map((v, i) => {
+            return <button
+                className={(v == props.getter) ? "selected-variant" : ""}
+                onClick={e => {
+                    props.setter(v);
+                }}
+                key={i}
+            >{props.variantNames[i]}</button>
+        })}
+    </React.Fragment>
 }
 
 export function Controls(props: {
@@ -212,6 +232,21 @@ export function Controls(props: {
         <div>
         <label>DoF Distance</label>
         <NumberObjPropInput log={true} sensitivity={0.001} getter={props.renderSettings} setter={props.setRenderSettings} k="dofFocalPlaneDistance"></NumberObjPropInput>
+        </div>
+        <div>
+        <label>FOV (Degrees)</label>
+        <NumberObjPropInput log={false} sensitivity={0.01} getter={props.renderSettings} setter={props.setRenderSettings} k="fov"></NumberObjPropInput>
+        </div>
+        <div>
+            <label>Camera Type</label>
+            <ButtonSelect variantNames={["Perspective", "Orthographic", "Panoramic"]} variants={[0, 1, 2]} getter={props.renderSettings.cameraMode} setter={
+                e => {
+                    props.setRenderSettings({
+                        ...renderSettings,
+                        cameraMode: e
+                    });
+                }
+            }></ButtonSelect>
         </div>
         <div>
         <label>Reflections</label>
