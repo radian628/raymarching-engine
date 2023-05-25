@@ -1,0 +1,18 @@
+{
+  "devDependencies": {
+    "typescript": "^4.9.5",
+    "vite": "^4.1.4",
+    "vite-plugin-solid": "^2.6.1"
+  },
+  "dependencies": {
+    "@shaderfrog/glsl-parser": "^1.4.0",
+    "@solid-primitives/keyed": "^1.1.10",
+    "codemirror": "^6.0.1",
+    "gl-matrix": "^3.4.3",
+    "solid-js": "^1.6.11"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  }
+}
