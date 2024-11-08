@@ -80,6 +80,7 @@ export function ShaderCodeSettings(props: {
             <option value="rotation-fractal.glsl">rotation-fractal.glsl</option>
             <option value="tree.glsl">tree.glsl</option>
             <option value="smooth-tree.glsl">smooth-tree.glsl</option>
+            <option value="sphere-grid.glsl">sphere-grid.glsl</option>
           </select>
         </Named>
       </div>
